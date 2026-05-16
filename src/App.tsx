@@ -8,7 +8,6 @@ import {
   Play,
   Plus,
   RefreshCw,
-  Sparkles,
   Sun,
   Trash2,
   UploadCloud,
@@ -465,15 +464,15 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div className="brand-lockup">
+        <a className="brand-lockup" href="https://ctikki.com" target="_blank" rel="noreferrer" aria-label="访问 ctikki.com">
           <span className="brand-mark" aria-hidden="true">
-            <Sparkles size={18} />
+            <img src="/image-studio-icon.svg" alt="" />
           </span>
           <div>
             <p className="eyebrow">Custom generation</p>
-            <h1>自定义生图</h1>
+            <h1>Image Studio</h1>
           </div>
-        </div>
+        </a>
 
         <p className="status-pill" aria-live="polite">
           {isGenerating || isLoadingModels ? <Loader2 className="spin" size={16} /> : null}
@@ -491,7 +490,7 @@ export default function App() {
         </button>
       </header>
 
-      <main className="workbench" aria-label="自定义生图工作台">
+      <main className="workbench" aria-label="Image Studio 工作台">
         <section className="panel params-panel" aria-label="参数">
           <div className="section-heading">
             <span>01</span>

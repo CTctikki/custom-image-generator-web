@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 
 const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
 const types = readFileSync(new URL("../src/types.ts", import.meta.url), "utf8");
+const index = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 
 function assert(condition, message) {
   if (!condition) {
@@ -28,5 +29,11 @@ assert(!app.includes("seed-control"), "Seed-specific control class must not be u
 assert(!app.includes("seedLocked"), "Seed lock state must not exist in the UI.");
 assert(!app.includes("workspace.seed"), "Workspace seed state must not be used by the UI.");
 assert(!types.includes("seedLocked"), "WorkspaceState must not expose seedLocked.");
+
+assert(index.includes("<title>image studio-你的专属生图台</title>"), "Browser tab title must use the Image Studio branding.");
+assert(index.includes('rel="icon"') && index.includes("/image-studio-icon.svg"), "Browser tab must use the Image Studio icon.");
+assert(app.includes('href="https://ctikki.com"'), "Brand title must link to ctikki.com.");
+assert(app.includes(">Image Studio<"), "Primary brand title must render Image Studio.");
+assert(app.includes("/image-studio-icon.svg"), "Header brand mark must use the Image Studio icon.");
 
 console.log("UI contract checks passed.");
