@@ -16,10 +16,10 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { fetchProviderModels, generateImage } from "./api";
+import { loadStoredHistory, saveStoredHistory } from "./historyStore";
 import type { AspectRatio, HistoryItem, ImageSize, InputImage, ProviderModelOption, WorkspaceState } from "./types";
 
 const WORKSPACE_KEY = "custom-image-workspace-v2";
-const HISTORY_KEY = "custom-image-history-v1";
 const INPUT_IMAGE_LIMIT = 12;
 const HISTORY_LIMIT = 40;
 const DEFAULT_BASE_URL = "https://api.lts4ai.com";
@@ -75,16 +75,6 @@ function readStoredWorkspace(): WorkspaceState {
     };
   } catch {
     return DEFAULT_WORKSPACE;
-  }
-}
-
-function readStoredHistory(): HistoryItem[] {
-  try {
-    const raw = localStorage.getItem(HISTORY_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.slice(0, HISTORY_LIMIT) : [];
-  } catch {
-    return [];
   }
 }
 
@@ -178,10 +168,11 @@ export default function App() {
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [inputImages, setInputImages] = useState<InputImage[]>([]);
   const [selectedInputIndex, setSelectedInputIndex] = useState(0);
-  const [history, setHistory] = useState<HistoryItem[]>(readStoredHistory);
-  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(() => readStoredHistory()[0]?.id ?? null);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
   const [selectedHistoryIds, setSelectedHistoryIds] = useState<string[]>([]);
   const [isManagingHistory, setIsManagingHistory] = useState(false);
+  const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [statusMessage, setStatusMessage] = useState("工作台就绪。");
   const [isApiKeyVisible, setIsApiKeyVisible] = useState(false);
@@ -275,12 +266,48 @@ export default function App() {
   }, [workspace]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, HISTORY_LIMIT)));
-    } catch {
-      localStorage.removeItem(HISTORY_KEY);
+    let isActive = true;
+
+    loadStoredHistory(HISTORY_LIMIT)
+      .then((storedHistory) => {
+        if (!isActive) {
+          return;
+        }
+        setHistory(storedHistory);
+        setSelectedHistoryId(storedHistory[0]?.id ?? null);
+      })
+      .catch(() => {
+        if (isActive) {
+          setStatusMessage("历史记录读取失败，本次仍可继续生成。");
+        }
+      })
+      .finally(() => {
+        if (isActive) {
+          setIsHistoryLoaded(true);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isHistoryLoaded) {
+      return;
     }
-  }, [history]);
+
+    let isActive = true;
+    saveStoredHistory(history, HISTORY_LIMIT).catch(() => {
+      if (isActive) {
+        setStatusMessage("历史记录保存失败，本次图片仍可下载。");
+      }
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [history, isHistoryLoaded]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -721,7 +748,7 @@ export default function App() {
             <div className="history-head">
               <div>
                 <h2>历史</h2>
-                <span>{isManagingHistory ? `已选 ${selectedHistoryIds.length}` : `${history.length} 张`}</span>
+                <span>{isManagingHistory ? `已选 ${selectedHistoryIds.length}` : isHistoryLoaded ? `${history.length} 张` : "读取中"}</span>
               </div>
               {isManagingHistory ? (
                 <div className="history-actions">
@@ -746,7 +773,9 @@ export default function App() {
             </div>
 
             <div className="history-list">
-              {history.length === 0 ? (
+              {!isHistoryLoaded ? (
+                <div className="empty-history">正在读取历史</div>
+              ) : history.length === 0 ? (
                 <div className="empty-history">暂无记录</div>
               ) : (
                 history.map((item) => (
