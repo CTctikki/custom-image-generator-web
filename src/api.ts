@@ -14,8 +14,6 @@ interface GeneratedImage {
   mimeType: string;
 }
 
-const PROXIED_PROVIDER_ORIGIN = "https://api.lts4ai.com";
-
 function normalizeBaseUrl(apiBaseUrl: string) {
   const url = new URL(apiBaseUrl.trim());
   let pathname = url.pathname.replace(/\/+$/, "");
@@ -37,9 +35,6 @@ function normalizeBaseUrl(apiBaseUrl: string) {
 
 function providerUrl(apiBaseUrl: string, path: string) {
   const target = new URL(`${normalizeBaseUrl(apiBaseUrl)}${path}`);
-  if (target.origin === PROXIED_PROVIDER_ORIGIN) {
-    return `${target.pathname}${target.search}`;
-  }
   return target.toString();
 }
 
@@ -145,7 +140,7 @@ function parseJsonOrEventStream(text: string): any {
     if (stream.length > 0) {
       return stream.length === 1 ? stream[0] : { stream };
     }
-    throw error;
+    return { message: trimmed.slice(0, 240) };
   }
 }
 
