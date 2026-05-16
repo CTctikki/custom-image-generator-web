@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-server/
+
+# Vercel local project metadata
+.vercel/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local verification artifacts
+verification-*.png
+
+# Local handoff notes
+HANDOFF-*.md
