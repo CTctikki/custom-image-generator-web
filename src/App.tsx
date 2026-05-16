@@ -20,7 +20,7 @@ import type { AspectRatio, HistoryItem, ImageSize, InputImage, ProviderModelOpti
 
 const WORKSPACE_KEY = "custom-image-workspace-v2";
 const HISTORY_KEY = "custom-image-history-v1";
-const INPUT_IMAGE_LIMIT = 4;
+const INPUT_IMAGE_LIMIT = 12;
 const HISTORY_LIMIT = 40;
 const DEFAULT_BASE_URL = "https://api.lts4ai.com";
 const LEGACY_DEFAULT_BASE_URLS = new Set(["http://64.186.244.43:12001"]);

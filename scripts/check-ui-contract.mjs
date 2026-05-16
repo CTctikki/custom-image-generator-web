@@ -13,6 +13,9 @@ assert(
   app.includes('const DEFAULT_BASE_URL = "https://api.lts4ai.com"') && app.includes("baseUrl: DEFAULT_BASE_URL"),
   "Default Base URL must be https://api.lts4ai.com."
 );
+assert(app.includes("const INPUT_IMAGE_LIMIT = 12;"), "Reference image upload limit must be 12.");
+assert(app.includes("imageFiles.slice(0, action.mode === \"replace\" ? 1 : INPUT_IMAGE_LIMIT)"), "Batch upload must honor the image limit.");
+assert(app.includes("inputImages.length >= INPUT_IMAGE_LIMIT"), "Add-image control must disable at the image limit.");
 
 assert(
   app.includes('"http://64.186.244.43:12001"') && app.includes("LEGACY_DEFAULT_BASE_URLS"),
