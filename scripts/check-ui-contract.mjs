@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
 const types = readFileSync(new URL("../src/types.ts", import.meta.url), "utf8");
 const index = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 
 function assert(condition, message) {
   if (!condition) {
@@ -38,5 +39,11 @@ assert(app.includes("/image-studio-icon.svg"), "Header brand mark must use the I
 assert(app.includes("downloadSelectedHistory"), "History manager must support batch image downloads.");
 assert(app.includes('title="下载选中"'), "History manager must expose a selected-download button.");
 assert(app.includes("selectedItems.forEach((item) => downloadDataUrl"), "Batch download must reuse the existing image downloader.");
+assert(app.includes("history-title-row"), "History header must separate title content from actions.");
+assert(app.includes('aria-label="历史批量操作"'), "History batch controls must be grouped for a cleaner layout.");
+assert(styles.includes("minmax(220px, 240px)"), "History column should have enough width for batch controls.");
+assert(styles.includes(".history-title-row"), "History title row must have dedicated styling.");
+assert(styles.includes(".history-head.is-managing"), "Managing state must have dedicated history header styling.");
+assert(styles.includes('font-size: clamp(28px, 3vw, 42px);'), "Image Studio brand size must remain unchanged.");
 
 console.log("UI contract checks passed.");

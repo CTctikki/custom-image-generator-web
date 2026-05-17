@@ -761,13 +761,20 @@ export default function App() {
           </div>
 
           <aside className="panel history-panel" aria-label="历史记录">
-            <div className="history-head">
-              <div>
-                <h2>历史</h2>
-                <span>{isManagingHistory ? `已选 ${selectedHistoryIds.length}` : isHistoryLoaded ? `${history.length} 张` : "读取中"}</span>
+            <div className={`history-head ${isManagingHistory ? "is-managing" : ""}`}>
+              <div className="history-title-row">
+                <div className="history-title">
+                  <h2>历史</h2>
+                  <span>{isManagingHistory ? `已选 ${selectedHistoryIds.length}` : isHistoryLoaded ? `${history.length} 张` : "读取中"}</span>
+                </div>
+                {!isManagingHistory ? (
+                  <button className="text-button small" onClick={() => setIsManagingHistory(true)} type="button">
+                    管理
+                  </button>
+                ) : null}
               </div>
               {isManagingHistory ? (
-                <div className="history-actions">
+                <div className="history-actions" aria-label="历史批量操作">
                   <button
                     aria-label="下载选中"
                     className="icon-button control-button"
@@ -791,11 +798,7 @@ export default function App() {
                     <X size={17} />
                   </button>
                 </div>
-              ) : (
-                <button className="text-button small" onClick={() => setIsManagingHistory(true)} type="button">
-                  管理
-                </button>
-              )}
+              ) : null}
             </div>
 
             <div className="history-list">

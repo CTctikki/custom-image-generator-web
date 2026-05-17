@@ -183,8 +183,8 @@ h2 {
 
 .workbench {
   display: grid;
-  grid-template-columns: minmax(300px, 0.8fr) minmax(280px, 0.72fr) minmax(520px, 1.45fr);
-  gap: 12px;
+  grid-template-columns: minmax(300px, 0.76fr) minmax(280px, 0.7fr) minmax(700px, 1.54fr);
+  gap: 14px;
   min-height: calc(100vh - 104px);
 }
 
@@ -500,8 +500,8 @@ textarea {
 
 .output-region {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 190px;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 240px);
+  gap: 14px;
   min-width: 0;
 }
 
@@ -566,27 +566,50 @@ textarea {
 }
 
 .history-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
+  display: grid;
+  gap: 10px;
   padding: 12px;
   border-bottom: 1px solid var(--line);
 }
 
-.history-head div:first-child {
+.history-head.is-managing {
+  padding-bottom: 14px;
+}
+
+.history-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.history-title {
   display: grid;
   gap: 3px;
+  min-width: 0;
+}
+
+.history-title h2 {
+  white-space: nowrap;
 }
 
 .history-head span {
   color: var(--text-soft);
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .history-actions {
   display: flex;
-  gap: 6px;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.history-actions .control-button {
+  width: 38px;
+  min-height: 38px;
 }
 
 .history-list {
@@ -691,7 +714,7 @@ textarea {
 
   .output-region {
     grid-column: 1 / -1;
-    grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 240px);
   }
 }
 
