@@ -559,8 +559,6 @@ async function generateWithOpenAiImages(input: {
   if (hasInputImages && body instanceof FormData) {
     body.append("model", workspace.modelName);
     body.append("prompt", workspace.prompt);
-    body.append("n", "1");
-    body.append("response_format", "b64_json");
     body.append("size", toOpenAiImageSize(workspace.aspectRatio, workspace.imageSize));
     body.append("output_format", "png");
     input.inputImages.forEach((image, index) => {
