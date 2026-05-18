@@ -49,6 +49,18 @@ if (server.includes('body.append("response_format", "b64_json")') || server.incl
   throw new Error("Local server image edit FormData must not keep legacy response_format or n fields.");
 }
 
+if (!api.includes('body.append("image", base64ToBlob')) {
+  throw new Error("OpenAI image edit FormData must use the standard repeated image field.");
+}
+
+if (!server.includes('body.append("image", blob')) {
+  throw new Error("Local server image edit FormData must use the standard repeated image field.");
+}
+
+if (api.includes('body.append("image[]"') || server.includes('body.append("image[]"')) {
+  throw new Error("OpenAI image edit FormData must not use the non-standard image[] field.");
+}
+
 if (!api.includes("toOpenAiImageSize(workspace.aspectRatio, workspace.imageSize)")) {
   throw new Error("OpenAI Images requests must pass imageSize into toOpenAiImageSize.");
 }

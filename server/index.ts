@@ -557,7 +557,7 @@ async function generateWithOpenAiImages(input: GenerateRequest, timeoutMs: numbe
     input.inputImages.forEach((image, index) => {
       const bytes = Buffer.from(image.data, "base64");
       const blob = new Blob([new Uint8Array(bytes)], { type: image.mimeType });
-      body.append("image[]", blob, image.name || `input-${index + 1}.png`);
+      body.append("image", blob, image.name || `input-${index + 1}.png`);
     });
   }
 

@@ -562,7 +562,7 @@ async function generateWithOpenAiImages(input: {
     body.append("size", toOpenAiImageSize(workspace.aspectRatio, workspace.imageSize));
     body.append("output_format", "png");
     input.inputImages.forEach((image, index) => {
-      body.append("image[]", base64ToBlob(image.data, image.mimeType), image.name || `input-${index + 1}.png`);
+      body.append("image", base64ToBlob(image.data, image.mimeType), image.name || `input-${index + 1}.png`);
     });
   }
 
