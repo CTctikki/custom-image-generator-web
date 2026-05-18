@@ -144,6 +144,68 @@ function parseJsonOrEventStream(text: string): any {
   }
 }
 
+export function toUserFacingError(error: unknown) {
+  const rawMessage = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  const message = rawMessage.trim();
+  const normalized = message.toLowerCase();
+
+  if (!message) {
+    return "生成失败：上游没有返回可读的错误信息。";
+  }
+
+  if (/\b401\b/u.test(message) || normalized.includes("unauthorized") || normalized.includes("invalid api key")) {
+    return "API Key 无效或权限不足，请检查 Key 是否填写正确。";
+  }
+
+  if (
+    /\b402\b/u.test(message) ||
+    normalized.includes("insufficient") ||
+    normalized.includes("quota") ||
+    normalized.includes("credit") ||
+    message.includes("额度") ||
+    message.includes("余额")
+  ) {
+    return "额度不足或账户余额不可用，请先检查中转站额度。";
+  }
+
+  if (/\b429\b/u.test(message) || normalized.includes("rate limit") || normalized.includes("too many requests")) {
+    return "请求太频繁了，请稍等一会儿再试，或把生成数量调低。";
+  }
+
+  if (/\b405\b/u.test(message) || normalized.includes("method not allowed")) {
+    return "上游接口不支持当前请求方式，请刷新模型列表后重试。";
+  }
+
+  if (
+    normalized.includes("failed to fetch") ||
+    normalized.includes("networkerror") ||
+    normalized.includes("load failed") ||
+    normalized.includes("cors")
+  ) {
+    return "网络请求失败，可能是网络波动或上游跨域配置异常。";
+  }
+
+  if (
+    normalized.includes("unexpected token") ||
+    normalized.includes("not valid json") ||
+    normalized.includes("<!doctype") ||
+    normalized.includes("<html") ||
+    normalized.includes("an error occurred")
+  ) {
+    return "上游返回了非标准响应，可能是接口临时异常，请稍后重试。";
+  }
+
+  if (normalized.includes("abort") || normalized.includes("timeout")) {
+    return "请求超时，请稍后重试，或减少一次生成的图片数量。";
+  }
+
+  if (normalized.includes("model")) {
+    return `模型调用失败：${message}`;
+  }
+
+  return message.startsWith("生成失败") || message.startsWith("获取模型") ? message : `生成失败：${message}`;
+}
+
 async function readResponseBody(response: Response) {
   return parseJsonOrEventStream(await response.text());
 }

@@ -4,6 +4,7 @@ const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
 const types = readFileSync(new URL("../src/types.ts", import.meta.url), "utf8");
 const index = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+const api = readFileSync(new URL("../src/api.ts", import.meta.url), "utf8");
 
 function assert(condition, message) {
   if (!condition) {
@@ -38,12 +39,18 @@ assert(app.includes(">Image Studio<"), "Primary brand title must render Image St
 assert(app.includes("/image-studio-icon.svg"), "Header brand mark must use the Image Studio icon.");
 assert(app.includes("downloadSelectedHistory"), "History manager must support batch image downloads.");
 assert(app.includes('title="下载选中"'), "History manager must expose a selected-download button.");
-assert(app.includes("selectedItems.forEach((item) => downloadDataUrl"), "Batch download must reuse the existing image downloader.");
+assert(app.includes("downloadHistoryAsZip"), "Batch downloads must create one ZIP file.");
+assert(!app.includes("selectedItems.forEach((item) => downloadDataUrl"), "Batch download must not trigger many separate browser downloads.");
 assert(app.includes("history-title-row"), "History header must separate title content from actions.");
 assert(app.includes('aria-label="历史批量操作"'), "History batch controls must be grouped for a cleaner layout.");
 assert(styles.includes("minmax(220px, 240px)"), "History column should have enough width for batch controls.");
 assert(styles.includes(".history-title-row"), "History title row must have dedicated styling.");
 assert(styles.includes(".history-head.is-managing"), "Managing state must have dedicated history header styling.");
 assert(styles.includes('font-size: clamp(28px, 3vw, 42px);'), "Image Studio brand size must remain unchanged.");
+assert(app.includes("generationTasks"), "Generation flow must expose per-image task cards.");
+assert(app.includes("generation-task-grid"), "Result panel must render generation task cards.");
+assert(styles.includes(".generation-task-card"), "Generation task cards must have dedicated styling.");
+assert(app.includes("toUserFacingError"), "App must convert technical errors into user-facing Chinese messages.");
+assert(api.includes("toUserFacingError"), "Provider API layer must expose Chinese error normalization.");
 
 console.log("UI contract checks passed.");

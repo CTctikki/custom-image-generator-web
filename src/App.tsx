@@ -1,4 +1,5 @@
 import {
+  CheckCircle2,
   Download,
   Eye,
   EyeOff,
@@ -14,9 +15,10 @@ import {
   X
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
-import { fetchProviderModels, generateImage } from "./api";
+import { fetchProviderModels, generateImage, toUserFacingError } from "./api";
 import { loadStoredHistory, saveStoredHistory } from "./historyStore";
 import type { AspectRatio, HistoryItem, ImageSize, InputImage, ProviderModelOption, WorkspaceState } from "./types";
+import { downloadHistoryAsZip } from "./zipArchive";
 
 const WORKSPACE_KEY = "custom-image-workspace-v2";
 const INPUT_IMAGE_LIMIT = 12;
@@ -43,6 +45,19 @@ const ASPECT_RATIO_OPTIONS: Array<{ value: AspectRatio; label: string }> = [
 ];
 
 const IMAGE_SIZES: ImageSize[] = ["4K", "2K", "1K"];
+
+type GenerationTaskStatus = "running" | "success" | "failed";
+
+interface GenerationTask {
+  id: string;
+  index: number;
+  status: GenerationTaskStatus;
+  message: string;
+  imageDataUrl?: string;
+  mimeType?: string;
+  createdAt?: string;
+  historyId?: string;
+}
 
 const DEFAULT_WORKSPACE: WorkspaceState = {
   theme: "light",
@@ -146,10 +161,7 @@ function formatTime(value: string) {
 }
 
 function compactError(error: unknown) {
-  if (error instanceof Error && error.message.trim()) {
-    return error.message;
-  }
-  return "生成失败。";
+  return toUserFacingError(error);
 }
 
 function pickDefaultModel(models: ProviderModelOption[], currentModelName: string) {
@@ -172,6 +184,7 @@ export default function App() {
   const [selectedHistoryIds, setSelectedHistoryIds] = useState<string[]>([]);
   const [isManagingHistory, setIsManagingHistory] = useState(false);
   const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
+  const [generationTasks, setGenerationTasks] = useState<GenerationTask[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [statusMessage, setStatusMessage] = useState("工作台就绪。");
   const [isApiKeyVisible, setIsApiKeyVisible] = useState(false);
@@ -395,40 +408,78 @@ export default function App() {
     }
 
     const requestCount = Math.min(10, Math.max(1, workspace.concurrency));
-    const seeds = Array.from({ length: requestCount }, randomSeed);
+    const taskInputs = Array.from({ length: requestCount }, (_, index) => ({
+      id: `task-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`,
+      index,
+      seed: randomSeed()
+    }));
 
     setIsGenerating(true);
+    setGenerationTasks(
+      taskInputs.map((task) => ({
+        id: task.id,
+        index: task.index,
+        status: "running",
+        message: "正在生成"
+      }))
+    );
     setStatusMessage(`正在生成 ${requestCount} 张图片...`);
 
     try {
       const results = await Promise.allSettled(
-        seeds.map((seed) =>
-          generateImage({
-            workspace,
-            inputImages,
-            seed
-          })
-        )
+        taskInputs.map(async (task) => {
+          try {
+            const result = await generateImage({
+              workspace,
+              inputImages,
+              seed: task.seed
+            });
+            const item: HistoryItem = {
+              id: result.id,
+              imageDataUrl: result.image.dataUrl,
+              mimeType: result.image.mimeType,
+              prompt: workspace.prompt,
+              modelName: workspace.modelName,
+              protocol: workspace.protocol,
+              aspectRatio: workspace.aspectRatio,
+              imageSize: workspace.imageSize,
+              inputImageNames: inputImages.map((image) => image.name),
+              createdAt: result.createdAt
+            };
+
+            setGenerationTasks((current) =>
+              current.map((candidate) =>
+                candidate.id === task.id
+                  ? {
+                      ...candidate,
+                      status: "success",
+                      message: "生成完成",
+                      imageDataUrl: item.imageDataUrl,
+                      mimeType: item.mimeType,
+                      createdAt: item.createdAt,
+                      historyId: item.id
+                    }
+                  : candidate
+              )
+            );
+            return item;
+          } catch (error) {
+            const message = compactError(error);
+            setGenerationTasks((current) =>
+              current.map((candidate) => (candidate.id === task.id ? { ...candidate, status: "failed", message } : candidate))
+            );
+            throw new Error(message);
+          }
+        })
       );
-      const fulfilled = results.filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof generateImage>>> => result.status === "fulfilled");
+      const fulfilled = results.filter((result): result is PromiseFulfilledResult<HistoryItem> => result.status === "fulfilled");
       const rejected = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
 
       if (fulfilled.length === 0) {
         throw new Error(rejected.map((item) => compactError(item.reason)).find(Boolean) ?? "生成失败。");
       }
 
-      const createdItems: HistoryItem[] = fulfilled.map((result) => ({
-        id: result.value.id,
-        imageDataUrl: result.value.image.dataUrl,
-        mimeType: result.value.image.mimeType,
-        prompt: workspace.prompt,
-        modelName: workspace.modelName,
-        protocol: workspace.protocol,
-        aspectRatio: workspace.aspectRatio,
-        imageSize: workspace.imageSize,
-        inputImageNames: inputImages.map((image) => image.name),
-        createdAt: result.value.createdAt
-      }));
+      const createdItems = fulfilled.map((result) => result.value);
       const newestItem = createdItems.at(-1);
 
       setHistory((current) => [...createdItems.reverse(), ...current].slice(0, HISTORY_LIMIT));
@@ -445,6 +496,34 @@ export default function App() {
       setStatusMessage(compactError(error));
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const openTaskResult = (task: GenerationTask) => {
+    if (!task.historyId) {
+      return;
+    }
+
+    const item = history.find((candidate) => candidate.id === task.historyId);
+    if (item) {
+      setSelectedHistoryId(item.id);
+      setLightboxImage(item);
+      return;
+    }
+
+    if (task.imageDataUrl && task.mimeType && task.createdAt) {
+      setLightboxImage({
+        id: task.historyId,
+        imageDataUrl: task.imageDataUrl,
+        mimeType: task.mimeType,
+        prompt: workspace.prompt,
+        modelName: workspace.modelName,
+        protocol: workspace.protocol,
+        aspectRatio: workspace.aspectRatio,
+        imageSize: workspace.imageSize,
+        inputImageNames: inputImages.map((image) => image.name),
+        createdAt: task.createdAt
+      });
     }
   };
 
@@ -470,12 +549,8 @@ export default function App() {
       return;
     }
 
-    selectedItems.forEach((item) => downloadDataUrl({
-      dataUrl: item.imageDataUrl,
-      mimeType: item.mimeType,
-      createdAt: item.createdAt
-    }));
-    setStatusMessage(`已开始下载 ${selectedItems.length} 张图片。`);
+    downloadHistoryAsZip(selectedItems);
+    setStatusMessage(`已打包下载 ${selectedItems.length} 张图片。`);
   };
 
   return (
@@ -725,6 +800,38 @@ export default function App() {
               <span>03</span>
               <h2>结果</h2>
             </div>
+
+            {generationTasks.length > 0 ? (
+              <div className="generation-task-grid" aria-label="生成任务">
+                {generationTasks.map((task) => (
+                  <button
+                    className={`generation-task-card is-${task.status}`}
+                    disabled={task.status !== "success"}
+                    key={task.id}
+                    onClick={() => openTaskResult(task)}
+                    type="button"
+                  >
+                    <span className="generation-task-index">{String(task.index + 1).padStart(2, "0")}</span>
+                    <span className="generation-task-preview">
+                      {task.imageDataUrl ? (
+                        <img alt="" src={task.imageDataUrl} />
+                      ) : task.status === "failed" ? (
+                        <X size={22} />
+                      ) : (
+                        <Loader2 className="spin" size={22} />
+                      )}
+                    </span>
+                    <span className="generation-task-copy">
+                      <strong>
+                        {task.status === "success" ? "已完成" : task.status === "failed" ? "生成失败" : "生成中"}
+                        {task.status === "success" ? <CheckCircle2 size={14} /> : null}
+                      </strong>
+                      <small>{task.message}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
 
             {visibleHistoryItem ? (
               <div className="output-content">
