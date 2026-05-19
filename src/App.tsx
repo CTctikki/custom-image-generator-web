@@ -1,5 +1,6 @@
 import {
   CheckCircle2,
+  CreditCard,
   Download,
   Eye,
   EyeOff,
@@ -630,6 +631,16 @@ export default function App() {
             <p className="eyebrow">Custom generation</p>
             <h1>Image Studio</h1>
           </div>
+        </a>
+
+        <a
+          className="topup-button"
+          href="https://pay.ldxp.cn/shop/AMTT76KG"
+          rel="noreferrer"
+          target="_blank"
+        >
+          <CreditCard size={17} />
+          充值
         </a>
 
         <p className="status-pill" aria-live="polite">

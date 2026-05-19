@@ -88,7 +88,7 @@ button {
 
 .topbar {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(240px, auto) auto;
+  grid-template-columns: max-content max-content minmax(240px, 1fr) auto;
   align-items: center;
   gap: 14px;
 }
@@ -135,6 +135,39 @@ button {
   width: 24px;
   height: 24px;
   display: block;
+}
+
+.topup-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  width: fit-content;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line));
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 14px;
+  font-weight: 860;
+  padding: 8px 16px;
+  text-decoration: none;
+  box-shadow: 0 10px 24px rgba(45, 107, 77, 0.18);
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.topup-button:hover {
+  background: var(--accent-strong);
+  box-shadow: 0 14px 30px rgba(45, 107, 77, 0.22);
+  transform: translateY(-1px);
+}
+
+.topup-button:focus-visible {
+  outline: none;
+  box-shadow: 0 14px 30px rgba(45, 107, 77, 0.22), var(--focus);
 }
 
 .eyebrow {
@@ -921,9 +954,15 @@ textarea {
     justify-self: end;
   }
 
+  .topup-button {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: start;
+  }
+
   .status-pill {
     grid-column: 1 / -1;
-    grid-row: 2;
+    grid-row: 3;
     justify-content: flex-start;
     text-align: left;
   }

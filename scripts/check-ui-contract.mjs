@@ -36,6 +36,8 @@ assert(app.includes("resolveEffectiveAspectRatio"), "Adaptive mode must follow t
 assert(index.includes("<title>image studio-你的专属生图台</title>"), "Browser tab title must use the Image Studio branding.");
 assert(index.includes('rel="icon"') && index.includes("/image-studio-icon.svg"), "Browser tab must use the Image Studio icon.");
 assert(app.includes('href="https://ctikki.com"'), "Brand title must link to ctikki.com.");
+assert(app.includes('href="https://pay.ldxp.cn/shop/AMTT76KG"'), "Top bar must expose the recharge link.");
+assert(app.includes("topup-button") && styles.includes(".topup-button"), "Recharge link must have dedicated top bar styling.");
 assert(app.includes(">Image Studio<"), "Primary brand title must render Image Studio.");
 assert(app.includes("/image-studio-icon.svg"), "Header brand mark must use the Image Studio icon.");
 assert(app.includes("downloadSelectedHistory"), "History manager must support batch image downloads.");
