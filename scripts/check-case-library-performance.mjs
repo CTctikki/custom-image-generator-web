@@ -43,6 +43,7 @@ assert(styles.includes(".case-library-grid-window"), "Case library should positi
 assert(styles.includes(".case-image-wrap.is-loading"), "Case previews should have a dedicated loading placeholder state.");
 assert(styles.includes("@keyframes case-preview-shimmer"), "Case preview placeholders should include a subtle shimmer animation.");
 assert(styles.includes(".case-image-fallback"), "Case previews should show a graceful failed-image fallback.");
+assert(styles.includes("transform: scale(1.025);"), "Loaded case previews should settle from a subtle 1.025 scale.");
 assert(
   styles.includes("grid-template-columns: repeat(auto-fill, minmax(190px, 1fr))"),
   "Desktop case card sizing must keep the existing auto-fill minmax(190px, 1fr) rule."
