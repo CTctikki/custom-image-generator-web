@@ -33,15 +33,20 @@ assert(app.includes("CASE_GRID_MIN_COLUMN_WIDTH"), "Virtual grid should preserve
 assert(app.includes("measureCaseGrid") && app.includes("ResizeObserver"), "Case grid should measure the live layout before calculating visible cards.");
 assert(app.includes("window.scrollY") && app.includes("isCaseGridMobile"), "Mobile case grid virtualization should follow natural page scrolling.");
 assert(app.includes("usesWindowScroll"), "Virtual grid should support the existing desktop natural page scroll layout.");
+assert(app.includes("openCaseLibraryView"), "Case library navigation should reset the virtual window before the first paint.");
+assert(app.includes("useLayoutEffect"), "Case grid resets should happen before paint to avoid blank first frames.");
 assert(app.includes("visibleCaseLibrary"), "Case library should render only the visible case window.");
 assert(app.includes("caseImageLoadState"), "Case cards should track preview image loading state.");
 assert(app.includes("onLoad") && app.includes("onError"), "Case preview images should handle loaded and failed states.");
+assert(app.includes("node.complete") && app.includes("node.naturalWidth"), "Cached case preview images should be detected without waiting for a new load event.");
 
 assert(styles.includes(".case-library-grid-viewport"), "Case library should have a virtual scroll viewport.");
 assert(styles.includes(".case-library-grid-spacer"), "Case library should reserve the full virtual grid height.");
 assert(styles.includes(".case-library-grid-window"), "Case library should position the rendered virtual window.");
 assert(styles.includes(".case-image-wrap.is-loading"), "Case previews should have a dedicated loading placeholder state.");
 assert(styles.includes("@keyframes case-preview-shimmer"), "Case preview placeholders should include a subtle shimmer animation.");
+assert(styles.includes("@keyframes case-preview-reveal"), "Loaded case previews should animate on mount even when cached.");
+assert(styles.includes("case-preview-reveal 420ms"), "Loaded case preview reveal should be subtle and short.");
 assert(styles.includes(".case-image-fallback"), "Case previews should show a graceful failed-image fallback.");
 assert(styles.includes("transform: scale(1.025);"), "Loaded case previews should settle from a subtle 1.025 scale.");
 assert(

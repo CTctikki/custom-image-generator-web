@@ -21,7 +21,17 @@ import {
   UploadCloud,
   X
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type ReactNode
+} from "react";
 import { fetchProviderModels, generateImage, toUserFacingError } from "./api";
 import { CASE_LIBRARY_SOURCE, loadCaseLibrary, loadCasePrompts, type CaseLibraryItem, type CasePromptMap } from "./caseLibrary";
 import { createGenerationPlan, parsePromptQueue, resolveEffectiveAspectRatio } from "./generationPlan";
@@ -652,6 +662,20 @@ export default function App() {
     });
   }, [measureCaseGrid]);
 
+  const resetCaseGridWindow = useCallback(() => {
+    const viewport = caseGridViewportRef.current;
+    if (viewport) {
+      viewport.scrollTop = 0;
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    setCaseGridMetrics((current) => ({ ...current, scrollTop: 0 }));
+  }, []);
+
+  const openCaseLibraryView = useCallback(() => {
+    resetCaseGridWindow();
+    setActiveView("cases");
+  }, [resetCaseGridWindow]);
+
   const updateWorkspace = useCallback((patch: Partial<WorkspaceState>) => {
     setWorkspace((current) => ({ ...current, ...patch }));
   }, []);
@@ -873,18 +897,21 @@ export default function App() {
     };
   }, [activeView, scheduleCaseGridMeasure]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (activeView !== "cases") {
       return;
     }
 
-    const viewport = caseGridViewportRef.current;
-    if (viewport) {
-      viewport.scrollTop = 0;
-    }
-    setCaseGridMetrics((current) => ({ ...current, scrollTop: 0 }));
+    resetCaseGridWindow();
     scheduleCaseGridMeasure();
-  }, [activeView, caseLibraryItems.length, caseLibraryQuery, scheduleCaseGridMeasure, selectedCaseCategory]);
+  }, [
+    activeView,
+    caseLibraryItems.length,
+    caseLibraryQuery,
+    resetCaseGridWindow,
+    scheduleCaseGridMeasure,
+    selectedCaseCategory
+  ]);
 
   useEffect(() => {
     if (activeView === "cases") {
@@ -1253,7 +1280,7 @@ export default function App() {
 
   const showCaseLibraryFromAnnouncement = () => {
     dismissUpdateAnnouncement();
-    setActiveView("cases");
+    openCaseLibraryView();
   };
 
   const copyAssistantWechat = () => {
@@ -1296,7 +1323,7 @@ export default function App() {
             </button>
             <button
               className={activeView === "cases" ? "is-active" : ""}
-              onClick={() => setActiveView("cases")}
+              onClick={openCaseLibraryView}
               type="button"
             >
               <ImageIcon size={16} />
@@ -1893,6 +1920,12 @@ export default function App() {
                               loading="lazy"
                               onError={() => markCaseImageState(caseItem.id, "failed")}
                               onLoad={() => markCaseImageState(caseItem.id, "loaded")}
+                              ref={(node) => {
+                                if (!node || imageState !== "loading" || !node.complete) {
+                                  return;
+                                }
+                                markCaseImageState(caseItem.id, node.naturalWidth > 0 ? "loaded" : "failed");
+                              }}
                               src={caseItem.thumbImage}
                             />
                             {imageState === "failed" ? (
