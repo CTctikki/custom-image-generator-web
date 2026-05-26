@@ -1,0 +1,5 @@
+[中文]
+请你生成 《XXX》 的关键人物关系图。
+
+[English]
+Please generate a key character relationship diagram for "XXX".

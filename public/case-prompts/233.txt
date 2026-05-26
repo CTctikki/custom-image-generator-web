@@ -1,0 +1,5 @@
+[中文]
+生成一张蒙娜丽莎喝可乐的油画。
+
+[English]
+Generate an oil painting of Mona Lisa drinking cola.

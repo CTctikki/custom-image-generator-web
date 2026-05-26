@@ -1,8 +1,11 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const sourcePath = new URL("../public/cases.json", import.meta.url);
-const indexPath = new URL("../public/cases-index.json", import.meta.url);
-const promptsPath = new URL("../public/case-prompts.json", import.meta.url);
+const sourcePath = fileURLToPath(new URL("../public/cases.json", import.meta.url));
+const indexPath = fileURLToPath(new URL("../public/cases-index.json", import.meta.url));
+const promptsDirPath = fileURLToPath(new URL("../public/case-prompts/", import.meta.url));
+const legacyPromptsPath = fileURLToPath(new URL("../public/case-prompts.json", import.meta.url));
 
 const source = JSON.parse(readFileSync(sourcePath, "utf8"));
 
@@ -28,11 +31,14 @@ const indexPayload = {
   }))
 };
 
-const promptsPayload = {
-  prompts: Object.fromEntries(source.cases.map((caseItem) => [caseItem.id, caseItem.prompt]))
-};
-
 writeFileSync(indexPath, JSON.stringify(indexPayload));
-writeFileSync(promptsPath, JSON.stringify(promptsPayload));
+rmSync(legacyPromptsPath, { force: true });
+rmSync(promptsDirPath, { force: true, recursive: true });
+mkdirSync(promptsDirPath, { recursive: true });
 
-console.log(`Wrote ${indexPayload.cases.length} case index rows and ${Object.keys(promptsPayload.prompts).length} prompts.`);
+for (const caseItem of source.cases) {
+  writeFileSync(join(promptsDirPath, `${caseItem.id}.txt`), caseItem.prompt);
+}
+
+const promptFiles = readdirSync(promptsDirPath).filter((name) => name.endsWith(".txt"));
+console.log(`Wrote ${indexPayload.cases.length} case index rows and ${promptFiles.length} prompt files.`);

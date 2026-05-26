@@ -1,0 +1,5 @@
+[中文]
+生成一系列工笔画书签的设计稿
+
+[English]
+Generate a series of design drafts for Gongbi painting bookmarks.

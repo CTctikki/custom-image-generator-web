@@ -1,0 +1,42 @@
+{
+  "type": "VTuber debut stream thumbnail",
+  "character": {
+    "appearance": "anime girl, long dark purple hair, purple eyes, frilly white blouse, dark purple bow tie, large hair bow",
+    "pose": "finger to lips, cute expression",
+    "props": "condenser microphone with pop filter and purple ribbon on the right"
+  },
+  "background": "magical starry night, sparkles, glowing butterflies, purple and white color palette",
+  "layout": {
+    "typography": [
+      {
+        "position": "top left",
+        "style": "large bold text with cursive English above",
+        "text": "{argument name=\"main title\" default=\"初配信\"}",
+        "subtext_1": "First Stream",
+        "subtext_2": "Nice to meet you! I am Shisaki Lily!"
+      },
+      {
+        "position": "middle left",
+        "style": "decorative box",
+        "text": "{argument name=\"character description\" default=\"お嬢様学校に通う清楚系VTuberですわ♪\"}"
+      },
+      {
+        "position": "bottom left",
+        "style": "logo style",
+        "text": "{argument name=\"character name\" default=\"紫咲リリー\"}",
+        "subtext": "Shisaki Lily"
+      },
+      {
+        "position": "top right",
+        "style": "vertical text",
+        "text": "{argument name=\"catchphrase\" default=\"皆さまの心に、優雅なひとときをお届けしますわ♪\"}"
+      },
+      {
+        "position": "bottom right",
+        "style": "decorative pill shape",
+        "text": "{argument name=\"stream date and time\" default=\"4.21 SUN 21:00~\"}",
+        "subtext": "✦ START ✦"
+      }
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+[中文]
+生成一套运动类app的iconfont
+
+[English]
+Generate a set of iconfont for a sports app

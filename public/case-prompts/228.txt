@@ -1,0 +1,5 @@
+[中文]
+生成一张与这张图片完美匹配的广告图片。信息量要多一些。
+
+[English]
+Generate an advertising image that perfectly matches this image. There should be a lot of information.

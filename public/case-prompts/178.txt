@@ -1,0 +1,5 @@
+[中文]
+生成一套亚马逊 A+=详情图
+
+[English]
+Generate a set of Amazon A+= detail images

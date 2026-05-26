@@ -1,0 +1,5 @@
+[中文]
+生成抖音直播间界面，内容是一个美女在直播
+
+[English]
+Generate a TikTok live stream interface, the content is a beautiful woman live streaming

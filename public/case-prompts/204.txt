@@ -1,0 +1,5 @@
+[中文]
+生成一张动画分镜生成器
+
+[English]
+Generate an animation storyboard generator

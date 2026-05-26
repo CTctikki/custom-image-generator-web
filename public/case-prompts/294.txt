@@ -1,0 +1,5 @@
+[中文]
+生成一张潮菜馆菜单图
+
+[English]
+Generate a Teochew restaurant menu image.

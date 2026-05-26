@@ -61,7 +61,7 @@ export const CASE_LIBRARY_CATEGORIES: string[] = [];
 
 export const CASE_LIBRARY: CaseLibraryItem[] = [];
 
-let promptMapRequest: null | Promise<CasePromptMap> = null;
+const promptRequestCache = new Map<number, Promise<string>>();
 
 function toSourceImageUrl(imagePath: string) {
   return imagePath.startsWith("/") ? `${IMAGE_BASE_URL}${imagePath}` : imagePath;
@@ -107,22 +107,25 @@ export async function loadCaseLibrary(): Promise<CaseLibraryData> {
   return normalizeCaseLibrary((await response.json()) as RawCaseLibraryData);
 }
 
-export async function loadCasePrompts(): Promise<CasePromptMap> {
-  promptMapRequest ??= fetch("/case-prompts.json")
+export async function loadCasePrompt(caseId: number): Promise<string> {
+  const cachedRequest = promptRequestCache.get(caseId);
+  if (cachedRequest) {
+    return cachedRequest;
+  }
+
+  const request = fetch(`/case-prompts/${caseId}.txt`)
     .then(async (response) => {
       if (!response.ok) {
         throw new Error("CASE_PROMPT_LOAD_FAILED");
       }
 
-      const payload = (await response.json()) as { prompts?: Record<string, string> };
-      return Object.fromEntries(
-        Object.entries(payload.prompts ?? {}).map(([key, value]) => [Number(key), value])
-      );
+      return (await response.text()).trim();
     })
     .catch((error) => {
-      promptMapRequest = null;
+      promptRequestCache.delete(caseId);
       throw error;
     });
 
-  return promptMapRequest;
+  promptRequestCache.set(caseId, request);
+  return request;
 }

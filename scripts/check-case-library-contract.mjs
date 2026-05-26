@@ -24,7 +24,7 @@ assert(caseLibrary.includes("awesome-gpt-image-2"), "Case library must credit th
 assert(caseLibrary.includes("CASE_LIBRARY_CATEGORIES"), "Case library must expose filterable categories.");
 
 assert(app.includes("loadCaseLibrary"), "App must load the case library data.");
-assert(app.includes("loadCasePrompts"), "App must load full prompts separately.");
+assert(app.includes("loadCasePrompt"), "App must load full prompts separately.");
 assert(app.includes("caseLibraryQuery"), "Case library must support search.");
 assert(app.includes("selectedCaseCategory"), "Case library must support category filtering.");
 assert(app.includes("activeView"), "App must support top-level tab navigation.");

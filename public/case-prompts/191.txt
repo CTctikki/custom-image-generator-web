@@ -1,0 +1,5 @@
+[中文]
+创建一张科幻电影海报
+
+[English]
+Create a Science fiction movie poster

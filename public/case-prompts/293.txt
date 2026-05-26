@@ -1,0 +1,5 @@
+[中文]
+生成一张校园日报，主题AI教育
+
+[English]
+Generate a campus daily newspaper, theme AI education

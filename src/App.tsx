@@ -33,7 +33,7 @@ import {
   type ReactNode
 } from "react";
 import { fetchProviderModels, generateImage, toUserFacingError } from "./api";
-import { CASE_LIBRARY_SOURCE, loadCaseLibrary, loadCasePrompts, type CaseLibraryItem, type CasePromptMap } from "./caseLibrary";
+import { CASE_LIBRARY_SOURCE, loadCaseLibrary, loadCasePrompt, type CaseLibraryItem, type CasePromptMap } from "./caseLibrary";
 import { resolveGenerationParallelism, settleGenerationTasks } from "./generationExecution";
 import { createGenerationPlan, MAX_GENERATION_COUNT, parsePromptQueue, resolveEffectiveAspectRatio } from "./generationPlan";
 import { loadStoredHistory, saveStoredHistory } from "./historyStore";
@@ -486,7 +486,7 @@ export default function App() {
   const [casePromptsById, setCasePromptsById] = useState<CasePromptMap>({});
   const [caseLibraryTotal, setCaseLibraryTotal] = useState(CASE_LIBRARY_SOURCE.totalCases);
   const [isCaseLibraryLoading, setIsCaseLibraryLoading] = useState(true);
-  const [isCasePromptLoading, setIsCasePromptLoading] = useState(false);
+  const [loadingCasePromptId, setLoadingCasePromptId] = useState<number | null>(null);
   const [caseLibraryError, setCaseLibraryError] = useState("");
   const [caseLibraryQuery, setCaseLibraryQuery] = useState("");
   const [selectedCaseCategory, setSelectedCaseCategory] = useState(ALL_CASE_CATEGORY);
@@ -507,7 +507,6 @@ export default function App() {
     index: null
   });
   const modelLoadRequestRef = useRef(0);
-  const casePromptLoadAttemptedRef = useRef(false);
   const caseGridViewportRef = useRef<HTMLDivElement | null>(null);
   const caseGridWindowRef = useRef<HTMLDivElement | null>(null);
   const firstCaseCardRef = useRef<HTMLButtonElement | null>(null);
@@ -539,7 +538,9 @@ export default function App() {
     () => caseLibraryItems.find((caseItem) => caseItem.id === selectedCaseId) ?? filteredCaseLibrary[0] ?? caseLibraryItems[0] ?? null,
     [caseLibraryItems, filteredCaseLibrary, selectedCaseId]
   );
+  const [isMobileViewport, setIsMobileViewport] = useState(() => window.matchMedia("(max-width: 900px)").matches);
   const selectedCasePrompt = selectedCaseItem ? (casePromptsById[selectedCaseItem.id] ?? selectedCaseItem.prompt ?? "") : "";
+  const isCasePromptLoading = selectedCaseItem !== null && loadingCasePromptId === selectedCaseItem.id;
   const canUseSelectedCasePrompt = selectedCasePrompt.trim().length > 0;
   const caseGridTotalRows = Math.ceil(filteredCaseLibrary.length / caseGridMetrics.columns);
   const caseGridTotalHeight = Math.max(0, caseGridTotalRows * caseGridMetrics.rowHeight);
@@ -827,36 +828,45 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (activeView !== "cases" || caseLibraryItems.length === 0 || casePromptLoadAttemptedRef.current) {
+    if (selectedCaseItem === null || activeView !== "cases") {
+      return;
+    }
+
+    if (isMobileViewport && !isMobileCaseDetailOpen) {
+      return;
+    }
+
+    if (casePromptsById[selectedCaseItem.id]?.trim()) {
       return;
     }
 
     let isActive = true;
-    casePromptLoadAttemptedRef.current = true;
-    setIsCasePromptLoading(true);
+    setLoadingCasePromptId(selectedCaseItem.id);
 
-    loadCasePrompts()
-      .then((prompts) => {
+    loadCasePrompt(selectedCaseItem.id)
+      .then((prompt) => {
         if (isActive) {
-          setCasePromptsById(prompts);
+          setCasePromptsById((current) => ({
+            ...current,
+            [selectedCaseItem.id]: prompt
+          }));
         }
       })
       .catch(() => {
         if (isActive) {
           setStatusMessage("案例提示词加载失败，请稍后重试。");
-          casePromptLoadAttemptedRef.current = false;
         }
       })
       .finally(() => {
         if (isActive) {
-          setIsCasePromptLoading(false);
+          setLoadingCasePromptId((current) => (current === selectedCaseItem.id ? null : current));
         }
       });
 
     return () => {
       isActive = false;
     };
-  }, [activeView, caseLibraryItems.length]);
+  }, [activeView, casePromptsById, isMobileCaseDetailOpen, isMobileViewport, selectedCaseItem]);
 
   useEffect(() => {
     if (activeView !== "cases") {
@@ -1014,7 +1024,9 @@ export default function App() {
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 900px)");
+    setIsMobileViewport(mediaQuery.matches);
     const handleChange = (event: MediaQueryListEvent) => {
+      setIsMobileViewport(event.matches);
       if (!event.matches) {
         setIsMobileCaseDetailOpen(false);
       }
