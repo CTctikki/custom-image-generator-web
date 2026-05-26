@@ -16,7 +16,7 @@ const ASPECT_RATIO_VALUES: Array<{ value: FixedAspectRatio; ratio: number }> = [
   { value: "9:16", ratio: 9 / 16 }
 ];
 
-const MAX_GENERATION_COUNT = 10;
+export const MAX_GENERATION_COUNT = 10;
 const MAX_SEED = 2_147_483_647;
 
 export interface GenerationPlanTask {
@@ -72,7 +72,7 @@ export function createGenerationPlan(input: {
 }): GenerationPlanTask[] {
   const prompts =
     input.workspace.promptMode === "queue"
-      ? parsePromptQueue(input.workspace.prompt)
+      ? parsePromptQueue(input.workspace.prompt).slice(0, MAX_GENERATION_COUNT)
       : Array.from({ length: normalizeCount(input.workspace.concurrency) }, () => input.workspace.prompt.trim());
   const baseSeed = normalizeSeed(input.workspace.seedLocked ? input.workspace.seed : input.createRandomSeed());
   const aspectRatio = resolveEffectiveAspectRatio(input.workspace.aspectRatio, input.inputImages);

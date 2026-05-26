@@ -76,4 +76,27 @@ assertEqual(countPlan.length, 2, "Count mode should create N tasks");
 assertArrayEqual(countPlan.map((task) => task.prompt), ["single prompt", "single prompt"], "Count mode repeats the same prompt");
 assertArrayEqual(countPlan.map((task) => task.seed), [500, 501], "Unlocked seed should pick one base seed and increment");
 
+const cappedCountPlan = createGenerationPlan({
+  workspace: { ...baseWorkspace, prompt: "single prompt", promptMode: "count", concurrency: 12 },
+  inputImages: [referenceImage],
+  createId: (index) => `capped-count-${index}`,
+  createRandomSeed: () => 700
+});
+
+assertEqual(cappedCountPlan.length, 10, "Count mode should cap task count at ten");
+
+const cappedQueuePlan = createGenerationPlan({
+  workspace: {
+    ...baseWorkspace,
+    prompt: Array.from({ length: 12 }, (_, index) => `line ${index + 1}`).join("\n"),
+    promptMode: "queue"
+  },
+  inputImages: [referenceImage],
+  createId: (index) => `capped-queue-${index}`,
+  createRandomSeed: () => 800
+});
+
+assertEqual(cappedQueuePlan.length, 10, "Queue mode should cap task count at ten");
+assertArrayEqual(cappedQueuePlan.map((task) => task.prompt), Array.from({ length: 10 }, (_, index) => `line ${index + 1}`), "Queue cap should keep the first ten prompts");
+
 console.log("Generation plan checks passed.");

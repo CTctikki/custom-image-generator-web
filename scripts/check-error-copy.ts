@@ -10,6 +10,6 @@ assertEqual(toUserFacingError(new Error("401 Unauthorized")), "API Key 无效或
 assertEqual(toUserFacingError(new Error("429 Too Many Requests")), "请求太频繁了，请稍等一会儿再试，或把生成数量调低。");
 assertEqual(toUserFacingError(new Error("405 Method Not Allowed")), "上游接口不支持当前请求方式，请刷新模型列表后重试。");
 assertEqual(toUserFacingError(new Error("Unexpected token '<', <!doctype html> is not valid JSON")), "上游返回了非标准响应，可能是接口临时异常，请稍后重试。");
-assertEqual(toUserFacingError(new Error("Failed to fetch")), "网络请求失败，可能是网络波动或上游跨域配置异常。");
+assertEqual(toUserFacingError(new Error("Failed to fetch")), "网络请求被中断，可能是 4K 生成耗时过长、网络波动或上游跨域配置异常。");
 
 console.log("Chinese error copy checks passed.");

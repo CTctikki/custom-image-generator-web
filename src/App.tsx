@@ -34,7 +34,8 @@ import {
 } from "react";
 import { fetchProviderModels, generateImage, toUserFacingError } from "./api";
 import { CASE_LIBRARY_SOURCE, loadCaseLibrary, loadCasePrompts, type CaseLibraryItem, type CasePromptMap } from "./caseLibrary";
-import { createGenerationPlan, parsePromptQueue, resolveEffectiveAspectRatio } from "./generationPlan";
+import { resolveGenerationParallelism, settleGenerationTasks } from "./generationExecution";
+import { createGenerationPlan, MAX_GENERATION_COUNT, parsePromptQueue, resolveEffectiveAspectRatio } from "./generationPlan";
 import { loadStoredHistory, saveStoredHistory } from "./historyStore";
 import type { AspectRatio, HistoryItem, ImageSize, InputImage, ProviderModelOption, WorkspaceState } from "./types";
 import { downloadHistoryAsZip } from "./zipArchive";
@@ -581,8 +582,8 @@ export default function App() {
   const promptQueue = useMemo(() => parsePromptQueue(workspace.prompt), [workspace.prompt]);
   const plannedTaskCount =
     workspace.promptMode === "queue"
-      ? promptQueue.length
-      : Math.min(10, Math.max(1, Number.parseInt(String(workspace.concurrency), 10) || 1));
+      ? Math.min(MAX_GENERATION_COUNT, promptQueue.length)
+      : Math.min(MAX_GENERATION_COUNT, Math.max(1, Number.parseInt(String(workspace.concurrency), 10) || 1));
   const effectiveAspectRatio = useMemo(
     () => resolveEffectiveAspectRatio(workspace.aspectRatio, inputImages),
     [inputImages, workspace.aspectRatio]
@@ -1108,20 +1109,24 @@ export default function App() {
       updateWorkspace({ seed: taskInputs[0].seed });
     }
 
+    const parallelism = resolveGenerationParallelism(taskInputs.length);
+
     setIsGenerating(true);
     setGenerationTasks(
       taskInputs.map((task) => ({
         id: task.id,
         index: task.index,
-        status: workspace.promptMode === "queue" && task.index > 0 ? "queued" : "running",
-        message: workspace.promptMode === "queue" && task.index > 0 ? "等待队列" : "正在生成",
+        status: workspace.promptMode === "queue" && task.index >= parallelism ? "queued" : "running",
+        message: workspace.promptMode === "queue" && task.index >= parallelism ? "等待队列" : "正在生成",
         prompt: task.prompt,
         seed: task.seed,
         aspectRatio: task.aspectRatio
       }))
     );
     setStatusMessage(
-      workspace.promptMode === "queue" ? `队列生成中：共 ${taskInputs.length} 条提示词。` : `正在生成 ${taskInputs.length} 张图片...`
+      workspace.promptMode === "queue"
+        ? `队列生成中：共 ${taskInputs.length} 条提示词，并行 ${parallelism} 张。`
+        : `正在生成 ${taskInputs.length} 张图片...`
     );
 
     try {
@@ -1175,18 +1180,7 @@ export default function App() {
         }
       };
 
-      const results =
-        workspace.promptMode === "queue"
-          ? await taskInputs.reduce<Promise<PromiseSettledResult<HistoryItem>[]>>(async (pending, task) => {
-              const settled = await pending;
-              try {
-                settled.push({ status: "fulfilled", value: await runTask(task) });
-              } catch (reason) {
-                settled.push({ status: "rejected", reason });
-              }
-              return settled;
-            }, Promise.resolve([]))
-          : await Promise.allSettled(taskInputs.map(runTask));
+      const results = await settleGenerationTasks(taskInputs, runTask);
       const fulfilled = results.filter((result): result is PromiseFulfilledResult<HistoryItem> => result.status === "fulfilled");
       const rejected = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
 
@@ -1416,7 +1410,11 @@ export default function App() {
               value={workspace.prompt}
             />
             <span className="field-hint">
-              {workspace.promptMode === "queue" ? `已识别 ${promptQueue.length} 条提示词，将按顺序逐张生成。` : "同一个提示词可一次生成多张。"}
+              {workspace.promptMode === "queue"
+                ? promptQueue.length > MAX_GENERATION_COUNT
+                  ? `已识别 ${promptQueue.length} 条提示词，本次执行前 ${MAX_GENERATION_COUNT} 条。`
+                  : `已识别 ${promptQueue.length} 条提示词。`
+                : "同一个提示词可一次生成多张。"}
             </span>
           </label>
 
@@ -1524,18 +1522,22 @@ export default function App() {
               <span>{workspace.promptMode === "queue" ? "队列条数" : "数量"}</span>
               <input
                 disabled={workspace.promptMode === "queue"}
-                max={10}
-                min={1}
+                max={MAX_GENERATION_COUNT}
+                min={workspace.promptMode === "queue" ? 0 : 1}
                 onChange={(event) =>
                   updateWorkspace({
-                    concurrency: Math.min(10, Math.max(1, Number.parseInt(event.currentTarget.value, 10) || 1))
+                    concurrency: Math.min(MAX_GENERATION_COUNT, Math.max(1, Number.parseInt(event.currentTarget.value, 10) || 1))
                   })
                 }
                 type="number"
-                value={workspace.promptMode === "queue" ? promptQueue.length : workspace.concurrency}
+                value={workspace.promptMode === "queue" ? plannedTaskCount : workspace.concurrency}
               />
               <span className="field-hint">
-                {workspace.promptMode === "queue" ? "队列模式按有效提示词行数生成，每行一张。" : `本次会创建 ${plannedTaskCount} 个生成任务。`}
+                {workspace.promptMode === "queue"
+                  ? promptQueue.length > MAX_GENERATION_COUNT
+                    ? `队列模式最多执行前 ${MAX_GENERATION_COUNT} 条，并发 ${MAX_GENERATION_COUNT} 个任务。`
+                    : `队列模式会同时生成 ${plannedTaskCount} 个任务。`
+                  : `本次会创建并并发 ${plannedTaskCount} 个生成任务。`}
               </span>
             </label>
           </div>

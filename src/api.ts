@@ -130,6 +130,10 @@ export function toOpenAiImageSize(aspectRatio: AspectRatio, imageSize: ImageSize
   }
 }
 
+export function getGenerateTimeoutMs(input: Pick<WorkspaceState, "imageSize">) {
+  return (input.imageSize === "4K" ? 30 : 10) * 60 * 1000;
+}
+
 function parseEventStreamJson(text: string): unknown[] {
   return text
     .split(/\r?\n\r?\n/)
@@ -200,7 +204,7 @@ export function toUserFacingError(error: unknown) {
     normalized.includes("load failed") ||
     normalized.includes("cors")
   ) {
-    return "网络请求失败，可能是网络波动或上游跨域配置异常。";
+    return "网络请求被中断，可能是 4K 生成耗时过长、网络波动或上游跨域配置异常。";
   }
 
   if (
@@ -493,7 +497,7 @@ async function generateWithGemini(input: {
         imageConfig: imageConfig(workspace)
       }
     }),
-    signal: AbortSignal.timeout(10 * 60 * 1000)
+    signal: AbortSignal.timeout(getGenerateTimeoutMs(workspace))
   });
 
   const raw = await readResponseBody(response);
@@ -530,7 +534,7 @@ async function generateWithOpenAiChat(input: {
       response_modalities: ["text", "image"],
       image_config: providerImageConfig(workspace)
     }),
-    signal: AbortSignal.timeout(10 * 60 * 1000)
+    signal: AbortSignal.timeout(getGenerateTimeoutMs(workspace))
   });
 
   const raw = await readResponseBody(response);
@@ -570,7 +574,7 @@ async function generateWithOpenAiImages(input: {
     method: "POST",
     headers: requestHeaders(workspace.apiKey, workspace.baseUrl, hasInputImages ? "" : "application/json"),
     body,
-    signal: AbortSignal.timeout(10 * 60 * 1000)
+    signal: AbortSignal.timeout(getGenerateTimeoutMs(workspace))
   });
 
   const raw = await readResponseBody(response);
