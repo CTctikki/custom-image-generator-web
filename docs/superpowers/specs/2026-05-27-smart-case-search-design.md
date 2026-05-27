@@ -1,76 +1,76 @@
-# Smart Case Search Design
+# 智能案例搜索设计
 
-## Decision
+## 结论
 
-Build a separate Python FastAPI service for semantic search over the public case library. The service owns BGE inference, case indexing, and search ranking. The existing React image generation site calls this service from the case-library search UI.
+新增一个独立的 Python FastAPI 搜索服务，用来给公共案例库做语义搜索。这个服务自己加载 `bge-base-zh-v1.5`，自己建立案例向量索引，自己完成搜索排序。现有 React 生图网站只负责调用这个服务，并继续使用已有的案例卡片、详情、复制 prompt、应用 prompt 流程。
 
-This first version is semantic image-case search, not a chat assistant. It does not search private user history and does not require Gemini or another LLM.
+第一版只做“语义找图”，不是聊天式创作助手。不搜索用户历史生成图，也不需要 Gemini 或其他 LLM。
 
-## Goals
+## 目标
 
-- Let users search public image cases by intent, style, scene, object, or rough Chinese description.
-- Reuse the existing public case data and existing card/detail/copy/apply UI.
-- Keep production deployment simple: one Python service with `bge-base-zh-v1.5` loaded locally.
-- Keep the site usable if the semantic search service is unavailable.
+- 用户可以用意图、风格、场景、对象或模糊中文描述搜索公共案例。
+- 复用现有公共案例数据，不重新设计案例库。
+- 部署简单：云服务器上跑一个 Python 服务，本地加载 `bge-base-zh-v1.5`。
+- 搜索服务不可用时，网站仍然可用，自动退回现在的关键词搜索。
 
-## Non-Goals
+## 不做什么
 
-- No user history search.
-- No image-to-image similarity search in this version.
-- No LLM-generated answers, prompt rewriting, or conversational flow.
-- No dependency on the existing Node local API for production semantic search.
+- 不搜索用户历史生成记录。
+- 不做以图搜图或视觉相似图搜索。
+- 不做 LLM 对话、prompt 改写、推荐理由生成。
+- 不依赖现有 Node 本地 API 来承载生产搜索。
 
-## Architecture
+## 架构
 
-The system has two runtime pieces:
+系统运行时分成两块：
 
-1. React frontend in `custom-image-generator-web`.
-2. New FastAPI search service with local `bge-base-zh-v1.5`.
+1. `custom-image-generator-web` 里的 React 前端。
+2. 新增 FastAPI 搜索服务，服务内置本地 BGE 模型。
 
-The frontend remains the source of the user experience. The search service only returns ranked case IDs and scores. The frontend maps those IDs back to the already loaded case records and renders the existing cards.
+前端仍然负责用户体验。搜索服务只返回排序后的案例 `id` 和相似度分数。前端拿到 `id` 后，用已有案例数据映射回完整案例，再按返回顺序展示卡片。
 
 ```mermaid
 flowchart LR
-  User["User searches case library"] --> Web["React site"]
-  Web --> SearchApi["FastAPI smart search service"]
-  SearchApi --> BGE["local bge-base-zh-v1.5"]
+  User["用户搜索案例库"] --> Web["React 生图网站"]
+  Web --> SearchApi["FastAPI 智能搜索服务"]
+  SearchApi --> BGE["本地 bge-base-zh-v1.5"]
   SearchApi --> Data["cases-index.json + case-prompts.json"]
   SearchApi --> Web
-  Web --> Cards["Existing case cards and detail panel"]
+  Web --> Cards["现有案例卡片和详情面板"]
 ```
 
-## Search Service
+## 搜索服务
 
-The FastAPI service loads these files from the web project:
+FastAPI 服务读取网站现有公共案例数据：
 
 - `public/cases-index.json`
 - `public/case-prompts.json`
 
-For each case, it builds one searchable text document from:
+每个案例会拼成一段可检索文本，包含：
 
-- title
-- category
-- styles
-- scenes
-- source label
-- prompt preview
-- full prompt
+- 标题
+- 分类
+- 风格标签
+- 场景标签
+- 来源名称
+- prompt 预览
+- 完整 prompt
 
-At startup, the service creates or loads embeddings for all public cases. The case library is small enough that a simple in-memory vector index is acceptable for v1. The service can persist embeddings to a local cache file so restarts do not need to recompute every vector.
+服务启动时为全部公共案例生成或加载 embedding。当前案例库规模不大，第一版用内存向量索引即可。为了减少重启耗时，embedding 可以缓存到本地文件；当案例数据变化时，缓存自动重建。
 
-Recommended local service folder:
+建议目录：
 
 ```text
 custom-image-generator-web/search-service
 ```
 
-## API
+## API 设计
 
 ### `GET /health`
 
-Returns service status, model load status, and case count.
+返回服务状态、模型加载状态和案例数量。
 
-Example response:
+示例：
 
 ```json
 {
@@ -82,7 +82,7 @@ Example response:
 
 ### `POST /search`
 
-Request:
+请求：
 
 ```json
 {
@@ -92,7 +92,7 @@ Request:
 }
 ```
 
-Response:
+返回：
 
 ```json
 {
@@ -105,47 +105,47 @@ Response:
 }
 ```
 
-Rules:
+规则：
 
-- Empty query returns no semantic results; the frontend keeps the default featured/category view.
-- `topK` defaults to 24 and should be capped server-side.
-- Category filtering can be applied before ranking when a specific category is selected.
-- Unknown case IDs are ignored by the frontend.
+- 空搜索词不返回语义结果，前端继续展示默认精选或分类结果。
+- `topK` 默认 24，服务端需要设置上限。
+- 如果用户选择了具体分类，服务端先按分类过滤，再做排序。
+- 前端遇到不存在的案例 `id` 时直接忽略。
 
-## Frontend Behavior
+## 前端行为
 
-The existing case-library search input becomes smart-search aware.
+现有案例库搜索框升级为“智能搜索优先”：
 
-When `VITE_CASE_SEARCH_API_URL` is configured:
+当配置了 `VITE_CASE_SEARCH_API_URL`：
 
-1. Debounce the user's query.
-2. Send `query`, selected category, and `topK` to `/search`.
-3. Render cases in the returned order.
-4. Keep existing detail, copy prompt, and apply prompt behavior.
+1. 用户输入搜索词后做 debounce。
+2. 前端向 `/search` 发送 `query`、当前分类、`topK`。
+3. 前端按服务端返回的 `id` 顺序展示案例。
+4. 保留现有详情、复制 prompt、应用 prompt 流程。
 
-If the search API is missing, slow, or returns an error:
+如果搜索 API 没配置、超时或报错：
 
-- Fall back to the current local keyword search.
-- Do not block image generation.
-- Do not show a disruptive error state; a small "keyword search" fallback state is enough.
+- 自动退回当前本地关键词搜索。
+- 不影响生图主流程。
+- 不弹干扰性错误；最多显示一个轻量的“关键词搜索”状态。
 
-When `VITE_CASE_SEARCH_API_URL` is not configured, the site behaves exactly as it does now.
+如果没有配置 `VITE_CASE_SEARCH_API_URL`，网站行为和现在完全一致。
 
-## Configuration
+## 配置
 
-Frontend environment variable:
+前端环境变量：
 
 ```text
 VITE_CASE_SEARCH_API_URL=https://image-search.ctikki.com
 ```
 
-Local development value:
+本地开发：
 
 ```text
 VITE_CASE_SEARCH_API_URL=http://127.0.0.1:8790
 ```
 
-Search service environment variables:
+搜索服务环境变量：
 
 ```text
 BGE_MODEL_PATH=/models/bge-base-zh-v1.5
@@ -156,44 +156,44 @@ ALLOWED_ORIGINS=https://image.ctikki.com,http://127.0.0.1:5174
 PORT=8790
 ```
 
-## Error Handling
+## 错误处理
 
-- Model load failure: `/health` returns `ok: false`; `/search` returns HTTP 503.
-- Missing case files: service starts with a clear startup error.
-- Embedding cache mismatch: rebuild cache from current case data.
-- Frontend request timeout: fall back to keyword search.
-- CORS rejection: fail closed; only configured origins can call the service.
+- 模型加载失败：`/health` 返回 `ok: false`，`/search` 返回 HTTP 503。
+- 案例文件缺失：服务启动时报明确错误。
+- embedding 缓存和案例数据不一致：自动重建缓存。
+- 前端请求超时：退回关键词搜索。
+- CORS：只允许配置过的域名访问，默认拒绝。
 
-## Testing
+## 验收测试
 
-Backend checks:
+后端需要验证：
 
-- Health endpoint returns loaded model and case count.
-- Search returns stable ranked IDs for a known query.
-- Category filter limits results.
-- Empty query returns no semantic results.
-- Cache rebuild works when case data changes.
+- `/health` 返回模型状态和案例数量。
+- 固定搜索词能返回稳定的排序结果。
+- 分类过滤生效。
+- 空搜索词不返回语义结果。
+- 案例数据变化后缓存能重建。
 
-Frontend checks:
+前端需要验证：
 
-- With API configured, search results follow returned ID order.
-- If API fails, keyword fallback still works.
-- Existing copy/apply prompt flows are unchanged.
-- Existing case-library contract and performance checks still pass.
+- 配置 API 后，展示顺序跟搜索服务返回顺序一致。
+- API 失败时，关键词搜索仍然可用。
+- 复制 prompt、应用 prompt 不受影响。
+- 现有案例库契约和性能检查继续通过。
 
-## Rollout
+## 上线步骤
 
-1. Add the FastAPI search service.
-2. Add frontend smart-search integration behind `VITE_CASE_SEARCH_API_URL`.
-3. Verify locally with `http://127.0.0.1:8790`.
-4. Deploy service on the cloud server with local BGE model.
-5. Set production frontend env var to the search service URL.
+1. 新增 FastAPI 搜索服务。
+2. 在前端接入 `VITE_CASE_SEARCH_API_URL`，保持可降级。
+3. 本地用 `http://127.0.0.1:8790` 验证。
+4. 云服务器部署搜索服务，并挂载本地 BGE 模型。
+5. 给生产前端配置搜索服务地址。
 
-## Future Extension
+## 后续扩展
 
-After semantic search is stable, a second version can add a real creative assistant:
+语义搜索稳定后，再做真正的创作助手：
 
-- Gemini rewrites vague user intent into better search queries.
-- Gemini explains why selected cases match.
-- Gemini converts selected cases into a ready-to-generate prompt.
-- Image embeddings can support "find visually similar images" later.
+- 用 Gemini 把模糊需求改写成更适合搜索的查询。
+- 让 Gemini 解释为什么推荐这些案例。
+- 让 Gemini 基于选中的案例生成可直接用于生图的 prompt。
+- 后续接图像 embedding，支持“找类似图片”。
