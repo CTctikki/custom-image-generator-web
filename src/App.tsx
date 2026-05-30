@@ -9,6 +9,7 @@ import {
   Image as ImageIcon,
   Loader2,
   Lock,
+  MessageCircle,
   Moon,
   Play,
   Plus,
@@ -464,6 +465,7 @@ function CaseLibraryDetailPanel({
 export default function App() {
   const [activeView, setActiveView] = useState<ActiveView>("studio");
   const [isUpdateAnnouncementOpen, setIsUpdateAnnouncementOpen] = useState(() => !hasSeenAnnouncementVersion());
+  const [isAiCommunityOpen, setIsAiCommunityOpen] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceState>(readStoredWorkspace);
   const [modelOptions, setModelOptions] = useState<ProviderModelOption[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
@@ -1318,6 +1320,16 @@ export default function App() {
             充值
           </a>
 
+          <button
+            aria-haspopup="dialog"
+            className="community-button"
+            onClick={() => setIsAiCommunityOpen(true)}
+            type="button"
+          >
+            <MessageCircle size={17} />
+            Ai交流群
+          </button>
+
           <nav className="view-tabs" aria-label="主功能标签">
             <button
               className={activeView === "studio" ? "is-active" : ""}
@@ -2021,6 +2033,39 @@ export default function App() {
               onCopy={copyCasePrompt}
               prompt={selectedCasePrompt}
             />
+          </section>
+        </div>
+      ) : null}
+
+      {isAiCommunityOpen ? (
+        <div className="ai-community-backdrop" onClick={() => setIsAiCommunityOpen(false)} role="presentation">
+          <section
+            aria-labelledby="ai-community-title"
+            aria-modal="true"
+            className="ai-community-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <button
+              aria-label="关闭 Ai 交流群"
+              className="icon-button ai-community-close"
+              onClick={() => setIsAiCommunityOpen(false)}
+              type="button"
+            >
+              <X size={18} />
+            </button>
+            <p className="ai-community-kicker">Image Studio Community</p>
+            <h2 id="ai-community-title">Ai交流群</h2>
+            <p className="ai-community-copy">
+              添加小助手申请入群 vx:<strong>Ctikki888</strong>
+            </p>
+            <div className="ai-community-qr">
+              <img alt="Ai小助手微信二维码" src="/ai-community-qr.jpg" />
+            </div>
+            <button className="release-announcement-secondary" onClick={copyAssistantWechat} type="button">
+              <Copy size={16} />
+              复制微信号
+            </button>
           </section>
         </div>
       ) : null}

@@ -38,6 +38,10 @@ assert(index.includes('rel="icon"') && index.includes("/image-studio-icon.svg"),
 assert(app.includes('href="https://ctikki.com"'), "Brand title must link to ctikki.com.");
 assert(app.includes('href="https://pay.ldxp.cn/shop/AMTT76KG"'), "Top bar must expose the recharge link.");
 assert(app.includes("topup-button") && styles.includes(".topup-button"), "Recharge link must have dedicated top bar styling.");
+assert(app.includes("Ai交流群"), "Top bar must expose the AI community entry.");
+assert(app.includes("ai-community-modal") && styles.includes(".ai-community-modal"), "AI community modal must have dedicated styling.");
+assert(app.includes("/ai-community-qr.jpg"), "AI community modal must render the assistant WeChat QR code.");
+assert(app.includes("Ctikki888"), "AI community modal must show the assistant WeChat ID.");
 assert(app.includes('const ANNOUNCEMENT_VERSION = "2026-05-20";'), "Update announcement must be tied to the 2026-05-20 release.");
 assert(app.includes('const ANNOUNCEMENT_STORAGE_KEY = "image-studio-announcement-version";'), "Update announcement must persist the viewed version.");
 assert(app.includes("5.20更新公告") && app.includes("Ctikki888"), "Update announcement must show the requested release copy.");
