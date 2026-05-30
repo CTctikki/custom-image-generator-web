@@ -28,6 +28,11 @@ assert(
 assert(app.includes("高级参数"), "Seed controls must live under the advanced parameter panel.");
 assert(app.includes("seedLocked"), "Advanced seed lock state must be available.");
 assert(app.includes("workspace.seed"), "Workspace seed state must be available for reproducible batches.");
+assert(
+  app.includes('const baseUrl = typeof workspace.baseUrl === "string" ? workspace.baseUrl.trim() : "";') &&
+    app.includes("baseUrl: !baseUrl || LEGACY_DEFAULT_BASE_URLS.has(baseUrl) ? DEFAULT_BASE_URL : baseUrl,"),
+  "Blank stored Base URL must fall back to the default provider URL."
+);
 assert(types.includes("seedLocked"), "WorkspaceState must expose seedLocked for advanced mode.");
 assert(app.includes("同提示词 N 张") && app.includes("多提示词队列"), "Prompt generation mode switch must be rendered.");
 assert(app.includes("parsePromptQueue"), "Prompt queue mode must parse one prompt per line.");

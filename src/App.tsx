@@ -158,11 +158,12 @@ function readStoredWorkspace(): WorkspaceState {
     const raw = localStorage.getItem(WORKSPACE_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
     const workspace = { ...DEFAULT_WORKSPACE, ...parsed };
+    const baseUrl = typeof workspace.baseUrl === "string" ? workspace.baseUrl.trim() : "";
     return {
       theme: workspace.theme === "dark" ? "dark" : "light",
       prompt: LEGACY_DEFAULT_PROMPTS.has(workspace.prompt) ? "" : workspace.prompt,
       apiKey: typeof workspace.apiKey === "string" ? workspace.apiKey : "",
-      baseUrl: LEGACY_DEFAULT_BASE_URLS.has(workspace.baseUrl) ? DEFAULT_BASE_URL : workspace.baseUrl,
+      baseUrl: !baseUrl || LEGACY_DEFAULT_BASE_URLS.has(baseUrl) ? DEFAULT_BASE_URL : baseUrl,
       modelName: typeof workspace.modelName === "string" ? workspace.modelName : "",
       protocol: workspace.protocol,
       aspectRatio: workspace.aspectRatio,
