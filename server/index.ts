@@ -347,19 +347,26 @@ function preferImageModels(models: ProviderModelOption[]) {
 }
 
 function dedupeModels(models: ProviderModelOption[]) {
-  const seen = new Set<string>();
-  const result: ProviderModelOption[] = [];
+  const seen = new Map<string, ProviderModelOption>();
 
   models.forEach((model) => {
     const id = normalizeModelId(model.id);
-    if (!id || seen.has(id)) {
+    if (!id) {
       return;
     }
-    seen.add(id);
-    result.push({ id, protocol: model.protocol });
+
+    const existing = seen.get(id);
+    if (!existing) {
+      seen.set(id, { id, protocol: model.protocol });
+      return;
+    }
+
+    if (existing.protocol !== "openai_images" && model.protocol === "openai_images") {
+      existing.protocol = "openai_images";
+    }
   });
 
-  return sortModels(preferImageModels(result));
+  return sortModels(preferImageModels([...seen.values()]));
 }
 
 function readGeminiModels(raw: any): ProviderModelOption[] {

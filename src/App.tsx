@@ -1140,6 +1140,11 @@ export default function App() {
       updateWorkspace({ seed: taskInputs[0].seed });
     }
 
+    const generationProtocol = selectedModel?.protocol ?? workspace.protocol;
+    if (selectedModel && selectedModel.protocol !== workspace.protocol) {
+      updateWorkspace({ protocol: selectedModel.protocol });
+    }
+
     const parallelism = resolveGenerationParallelism(taskInputs.length);
 
     setIsGenerating(true);
@@ -1168,7 +1173,7 @@ export default function App() {
 
         try {
           const result = await generateImage({
-            workspace: { ...workspace, prompt: task.prompt, aspectRatio: task.aspectRatio },
+            workspace: { ...workspace, protocol: generationProtocol, prompt: task.prompt, aspectRatio: task.aspectRatio },
             inputImages,
             seed: task.seed
           });
@@ -1178,7 +1183,7 @@ export default function App() {
             mimeType: result.image.mimeType,
             prompt: task.prompt,
             modelName: workspace.modelName,
-            protocol: workspace.protocol,
+            protocol: generationProtocol,
             aspectRatio: task.aspectRatio,
             imageSize: workspace.imageSize,
             seed: task.seed,
