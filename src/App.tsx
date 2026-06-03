@@ -32,10 +32,13 @@ import { downloadHistoryAsZip } from "./zipArchive";
 const WORKSPACE_KEY = "custom-image-workspace-v2";
 const ANNOUNCEMENT_VERSION = "2026-05-20";
 const ANNOUNCEMENT_STORAGE_KEY = "image-studio-announcement-version";
+const DEFAULT_MODEL_MIGRATION_KEY = "custom-image-default-model-migration";
+const DEFAULT_MODEL_MIGRATION_VERSION = "image2-2026-06-03";
 const INPUT_IMAGE_LIMIT = 12;
 const HISTORY_LIMIT = 40;
 const DEFAULT_BASE_URL = "https://api.lts4ai.com";
 const LEGACY_DEFAULT_BASE_URLS = new Set(["http://64.186.244.43:12001"]);
+const LEGACY_DEFAULT_MODEL_NAMES = new Set(["gemini-3.1-flash-image"]);
 const LEGACY_DEFAULT_PROMPTS = new Set([
   "把参考图中的服装穿到模特身上，保持版型、材质和细节一致。"
 ]);
@@ -111,12 +114,25 @@ function readStoredWorkspace(): WorkspaceState {
     const raw = localStorage.getItem(WORKSPACE_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
     const workspace = { ...DEFAULT_WORKSPACE, ...parsed };
+    const storedModelName = typeof workspace.modelName === "string" ? workspace.modelName : "";
+    let modelName = storedModelName;
+    try {
+      if (
+        localStorage.getItem(DEFAULT_MODEL_MIGRATION_KEY) !== DEFAULT_MODEL_MIGRATION_VERSION &&
+        LEGACY_DEFAULT_MODEL_NAMES.has(storedModelName)
+      ) {
+        modelName = "";
+        localStorage.setItem(DEFAULT_MODEL_MIGRATION_KEY, DEFAULT_MODEL_MIGRATION_VERSION);
+      }
+    } catch {
+      // Ignore restricted storage; model loading will still pick the default for fresh sessions.
+    }
     return {
       theme: workspace.theme === "dark" ? "dark" : "light",
       prompt: LEGACY_DEFAULT_PROMPTS.has(workspace.prompt) ? "" : workspace.prompt,
       apiKey: typeof workspace.apiKey === "string" ? workspace.apiKey : "",
       baseUrl: LEGACY_DEFAULT_BASE_URLS.has(workspace.baseUrl) ? DEFAULT_BASE_URL : workspace.baseUrl,
-      modelName: typeof workspace.modelName === "string" ? workspace.modelName : "",
+      modelName,
       protocol: workspace.protocol,
       aspectRatio: workspace.aspectRatio,
       imageSize: workspace.imageSize,
@@ -430,6 +446,7 @@ export default function App() {
   const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
   const [generationTasks, setGenerationTasks] = useState<GenerationTask[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const generationLockRef = useRef(false);
   const [statusMessage, setStatusMessage] = useState("工作台就绪。");
   const [isApiKeyVisible, setIsApiKeyVisible] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
@@ -462,6 +479,13 @@ export default function App() {
     }
     return history.find((item) => item.id === selectedHistoryId) ?? history[0];
   }, [history, selectedHistoryId]);
+  const resultPreviewItems = useMemo(() => {
+    if (!visibleHistoryItem) {
+      return history.slice(0, 3);
+    }
+
+    return [visibleHistoryItem, ...history.filter((item) => item.id !== visibleHistoryItem.id)].slice(0, 3);
+  }, [history, visibleHistoryItem]);
 
   const selectedModel = useMemo(
     () => modelOptions.find((model) => model.id === workspace.modelName) ?? null,
@@ -507,6 +531,27 @@ export default function App() {
           : caseLibraryError || `案例库就绪：${caseLibraryTotal || caseLibraryItems.length} 个案例。`
       : statusMessage;
   const isStatusBusy = activeView === "cases" ? isCaseLibraryLoading : isGenerating || isLoadingModels;
+  const finishedTaskCount = generationTasks.filter((task) => task.status === "success").length;
+  const failedTaskCount = generationTasks.filter((task) => task.status === "failed").length;
+  const resultProgressPercent =
+    generationTasks.length > 0 ? Math.round((finishedTaskCount / generationTasks.length) * 100) : visibleHistoryItem ? 100 : 0;
+  const resultStatusKind = isGenerating ? "running" : failedTaskCount > 0 && finishedTaskCount === 0 ? "failed" : visibleHistoryItem ? "success" : "idle";
+  const resultStatusTitle =
+    resultStatusKind === "running"
+      ? "生成中"
+      : resultStatusKind === "failed"
+        ? "生成失败"
+        : resultStatusKind === "success"
+          ? "生成完成"
+          : "等待生成";
+  const resultStatusMeta =
+    resultStatusKind === "running"
+      ? `${finishedTaskCount}/${generationTasks.length} 张已完成`
+      : resultStatusKind === "failed"
+        ? `${failedTaskCount} 个任务失败，请检查 Key、模型或网络。`
+        : visibleHistoryItem
+          ? `已保存到历史 · ${formatTime(visibleHistoryItem.createdAt)}`
+          : "生成完成后会自动保存到历史。";
 
   const updateWorkspace = useCallback((patch: Partial<WorkspaceState>) => {
     setWorkspace((current) => ({ ...current, ...patch }));
@@ -844,11 +889,18 @@ export default function App() {
   };
 
   const runGenerate = async () => {
+    if (generationLockRef.current) {
+      return;
+    }
+
     if (!canGenerate) {
       setStatusMessage("请先填写提示词，并从当前 Base URL 获取模型。");
       return;
     }
 
+    generationLockRef.current = true;
+
+    try {
     const taskInputs = createGenerationPlan({
       workspace,
       inputImages,
@@ -968,6 +1020,9 @@ export default function App() {
       setStatusMessage(compactError(error));
     } finally {
       setIsGenerating(false);
+    }
+    } finally {
+      generationLockRef.current = false;
     }
   };
 
@@ -1106,6 +1161,8 @@ export default function App() {
       </header>
 
       {activeView === "studio" ? (
+      <div className={`workbench-shell ${isHistorySidebarOpen ? "is-history-open" : ""}`}>
+      <div className="studio-workspace">
         <section className={`motion-console ${isGenerating ? "is-live" : ""}`} aria-label="创意引擎状态">
           <div className="motion-console-signal" aria-hidden="true">
             <span />
@@ -1114,25 +1171,7 @@ export default function App() {
             <span>Creative engine</span>
             <strong>{isGenerating ? "正在把提示词推入生成队列" : "准备生成下一组画面"}</strong>
           </div>
-          <dl className="motion-console-stats" aria-label="当前生成设置">
-            <div>
-              <dt>Tasks</dt>
-              <dd>{String(plannedTaskCount).padStart(2, "0")}</dd>
-            </div>
-            <div>
-              <dt>Frame</dt>
-              <dd>{effectiveAspectRatio === "Adaptive" ? "自动" : effectiveAspectRatio}</dd>
-            </div>
-            <div>
-              <dt>Quality</dt>
-              <dd>{workspace.imageSize}</dd>
-            </div>
-          </dl>
         </section>
-      ) : null}
-
-      {activeView === "studio" ? (
-      <div className={`workbench-shell ${isHistorySidebarOpen ? "is-history-open" : ""}`}>
       <main className="workbench" aria-label="Image Studio 工作台">
         <section className="panel params-panel" aria-label="参数">
           <div className="section-heading">
@@ -1429,76 +1468,117 @@ export default function App() {
               <h2>结果</h2>
             </div>
 
-            {generationTasks.length > 0 ? (
-              <div className="generation-task-grid" aria-label="生成任务">
-                {generationTasks.map((task) => (
-                  <button
-                    className={`generation-task-card is-${task.status}`}
-                    disabled={task.status !== "success"}
-                    key={task.id}
-                    onClick={() => openTaskResult(task)}
-                    type="button"
-                  >
-                    <span className="generation-task-index">{String(task.index + 1).padStart(2, "0")}</span>
-                    <span className="generation-task-preview">
-                      {task.imageDataUrl ? (
-                        <img alt="" src={task.imageDataUrl} />
-                      ) : task.status === "failed" ? (
-                        <X size={22} />
-                      ) : task.status === "queued" ? (
-                        <span className="queued-dot" />
-                      ) : (
-                        <Loader2 className="spin" size={22} />
-                      )}
-                    </span>
-                    <span className="generation-task-copy">
-                      <strong>
-                        {task.status === "success" ? "已完成" : task.status === "failed" ? "生成失败" : task.status === "queued" ? "排队中" : "生成中"}
-                        {task.status === "success" ? <CheckCircle2 size={14} /> : null}
-                      </strong>
-                      <small>{task.prompt ? `${task.message} · ${task.prompt}` : task.message}</small>
-                    </span>
+            <div className="result-showcase">
+              <div className="result-stage">
+                {visibleHistoryItem ? (
+                  <button className="output-image-button" onClick={() => setLightboxImage(visibleHistoryItem)} type="button">
+                    <img alt={visibleHistoryItem.prompt} src={visibleHistoryItem.imageDataUrl} />
+                    <span className="result-current-badge">当前版本</span>
                   </button>
-                ))}
-              </div>
-            ) : null}
-
-            {visibleHistoryItem ? (
-              <div className="output-content">
-                <button className="output-image-button" onClick={() => setLightboxImage(visibleHistoryItem)} type="button">
-                  <img alt={visibleHistoryItem.prompt} src={visibleHistoryItem.imageDataUrl} />
-                </button>
-                <div className="output-actions">
-                  <div>
-                    <strong>{visibleHistoryItem.modelName}</strong>
-                    <span>{formatTime(visibleHistoryItem.createdAt)}</span>
+                ) : (
+                  <div className="empty-output">
+                    <ImageIcon size={42} />
+                    <strong>等待生成</strong>
                   </div>
-                  <button
-                    className="text-button"
-                    onClick={() =>
-                      downloadDataUrl({
-                        dataUrl: visibleHistoryItem.imageDataUrl,
-                        mimeType: visibleHistoryItem.mimeType,
-                        createdAt: visibleHistoryItem.createdAt
-                      })
-                    }
-                    type="button"
-                  >
-                    <Download size={17} />
-                    下载
-                  </button>
+                )}
+              </div>
+
+              <div className="result-preview-strip" aria-label="结果版本">
+                {generationTasks.length > 0
+                  ? generationTasks.map((task) => (
+                      <button
+                        aria-label={`查看生成任务 ${task.index + 1}`}
+                        className={`generation-task-card result-preview-tile is-${task.status}`}
+                        disabled={task.status !== "success"}
+                        key={task.id}
+                        onClick={() => openTaskResult(task)}
+                        type="button"
+                      >
+                        <span className="generation-task-index">{String(task.index + 1).padStart(2, "0")}</span>
+                        <span className="generation-task-preview">
+                          {task.imageDataUrl ? (
+                            <img alt="" src={task.imageDataUrl} />
+                          ) : task.status === "failed" ? (
+                            <X size={20} />
+                          ) : task.status === "queued" ? (
+                            <span className="queued-dot" />
+                          ) : (
+                            <Loader2 className="spin" size={20} />
+                          )}
+                        </span>
+                      </button>
+                    ))
+                  : resultPreviewItems.map((item, index) => (
+                      <button
+                        aria-label={`查看历史版本 ${formatTime(item.createdAt)}`}
+                        className={`result-preview-tile ${item.id === visibleHistoryItem?.id ? "is-active" : ""}`}
+                        key={item.id}
+                        onClick={() => setSelectedHistoryId(item.id)}
+                        type="button"
+                      >
+                        <img alt="" src={item.imageDataUrl} />
+                        <span>{String(index + 1).padStart(2, "0")}</span>
+                      </button>
+                    ))}
+                <button className="result-preview-add" disabled={!canGenerate} onClick={() => void runGenerate()} type="button">
+                  <Plus size={20} />
+                </button>
+              </div>
+
+              <div className={`result-status-card is-${resultStatusKind}`}>
+                <div>
+                  {resultStatusKind === "running" ? (
+                    <Loader2 className="spin" size={17} />
+                  ) : resultStatusKind === "failed" ? (
+                    <X size={17} />
+                  ) : (
+                    <CheckCircle2 size={17} />
+                  )}
+                  <strong>{resultStatusTitle}</strong>
+                  <span>{resultStatusMeta}</span>
                 </div>
+                <div className="result-progress-track" aria-hidden="true">
+                  <span style={{ width: `${resultProgressPercent}%` }} />
+                </div>
+                <small>{resultProgressPercent}%</small>
               </div>
-            ) : (
-              <div className="empty-output">
-                <ImageIcon size={42} />
-                <strong>等待生成</strong>
+
+              <div className="result-action-bar">
+                <button className="text-button" disabled={!canGenerate} onClick={() => void runGenerate()} type="button">
+                  <RefreshCw size={16} />
+                  再次生成
+                </button>
+                <button className="text-button" disabled={!visibleHistoryItem} onClick={() => visibleHistoryItem && setLightboxImage(visibleHistoryItem)} type="button">
+                  <Search size={16} />
+                  放大查看
+                </button>
+                <button
+                  className="text-button"
+                  disabled={!visibleHistoryItem}
+                  onClick={() =>
+                    visibleHistoryItem &&
+                    downloadDataUrl({
+                      dataUrl: visibleHistoryItem.imageDataUrl,
+                      mimeType: visibleHistoryItem.mimeType,
+                      createdAt: visibleHistoryItem.createdAt
+                    })
+                  }
+                  type="button"
+                >
+                  <Download size={16} />
+                  下载
+                </button>
+                <button className="text-button" disabled={!visibleHistoryItem} type="button">
+                  <CheckCircle2 size={16} />
+                  已入历史
+                </button>
               </div>
-            )}
+            </div>
           </div>
 
         </section>
       </main>
+      </div>
       <button
         aria-controls="history-sidebar"
         aria-expanded={isHistorySidebarOpen}
@@ -1562,7 +1642,19 @@ export default function App() {
           ) : null}
         </div>
 
-        <div className="history-list">
+        <div className="history-current-version">
+          <span>当前版本</span>
+          <strong>{visibleHistoryItem ? formatTime(visibleHistoryItem.createdAt) : "等待生成"}</strong>
+          <small>
+            {visibleHistoryItem
+              ? `${visibleHistoryItem.modelName} · ${visibleHistoryItem.aspectRatio === "Adaptive" ? "自动" : visibleHistoryItem.aspectRatio} · ${
+                  visibleHistoryItem.imageSize
+                }`
+              : "生成完成后会自动保存到历史。"}
+          </small>
+        </div>
+
+        <div className="history-list history-timeline">
           {!isHistoryLoaded ? (
             <div className="empty-history">正在读取历史</div>
           ) : history.length === 0 ? (
@@ -1584,8 +1676,16 @@ export default function App() {
                 }}
                 type="button"
               >
-                <img alt="" src={item.imageDataUrl} />
-                <span>{formatTime(item.createdAt)}</span>
+                <span className="history-node" aria-hidden="true" />
+                <span className="history-thumb">
+                  <img alt="" src={item.imageDataUrl} />
+                </span>
+                <span className="history-tile-body">
+                  <strong>{formatTime(item.createdAt)}</strong>
+                  <small>
+                    {item.modelName} · {item.aspectRatio === "Adaptive" ? "自动" : item.aspectRatio} · {item.imageSize}
+                  </small>
+                </span>
               </button>
             ))
           )}
