@@ -33,7 +33,7 @@ import {
   type DragEvent,
   type ReactNode
 } from "react";
-import { fetchProviderModels, generateImage, toUserFacingError } from "./api";
+import { fetchProviderModels, generateImage, resolveProtocolFromModelName, toUserFacingError } from "./api";
 import { CASE_LIBRARY_SOURCE, loadCaseLibrary, loadCasePrompt, type CaseLibraryItem, type CasePromptMap } from "./caseLibrary";
 import { resolveGenerationParallelism, settleGenerationTasks } from "./generationExecution";
 import { createGenerationPlan, MAX_GENERATION_COUNT, parsePromptQueue, resolveEffectiveAspectRatio } from "./generationPlan";
@@ -175,13 +175,20 @@ function readStoredWorkspace(): WorkspaceState {
     } catch {
       // Ignore restricted storage; model loading will still pick the default for fresh sessions.
     }
+    const protocol =
+      workspace.protocol === "gemini_generate_content" ||
+      workspace.protocol === "openai_chat_completions" ||
+      workspace.protocol === "openai_images"
+        ? workspace.protocol
+        : DEFAULT_WORKSPACE.protocol;
+
     return {
       theme: workspace.theme === "dark" ? "dark" : "light",
       prompt: LEGACY_DEFAULT_PROMPTS.has(workspace.prompt) ? "" : workspace.prompt,
       apiKey: typeof workspace.apiKey === "string" ? workspace.apiKey : "",
       baseUrl: !baseUrl || LEGACY_DEFAULT_BASE_URLS.has(baseUrl) ? DEFAULT_BASE_URL : baseUrl,
       modelName,
-      protocol: workspace.protocol,
+      protocol: resolveProtocolFromModelName(modelName, protocol),
       aspectRatio: workspace.aspectRatio,
       imageSize: workspace.imageSize,
       concurrency: Math.min(10, Math.max(1, Number.parseInt(String(workspace.concurrency), 10) || 1)),
@@ -1140,7 +1147,7 @@ export default function App() {
       updateWorkspace({ seed: taskInputs[0].seed });
     }
 
-    const generationProtocol = selectedModel?.protocol ?? workspace.protocol;
+    const generationProtocol = selectedModel?.protocol ?? resolveProtocolFromModelName(workspace.modelName, workspace.protocol);
     if (selectedModel && selectedModel.protocol !== workspace.protocol) {
       updateWorkspace({ protocol: selectedModel.protocol });
     }

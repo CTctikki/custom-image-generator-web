@@ -309,6 +309,19 @@ function inferOpenAiModelProtocol(modelId: string): ProviderProtocol {
   return isOpenAiImageModelId(modelId) ? "openai_images" : "openai_chat_completions";
 }
 
+function resolveProtocolFromModelName(modelId: string, fallback: ProviderProtocol): ProviderProtocol {
+  const normalizedModelId = modelId.trim().toLowerCase();
+  if (
+    normalizedModelId.includes("dall-e") ||
+    normalizedModelId.includes("gpt-image") ||
+    /\bgpt[-\d.]*-image(?:-\d+)?\b/u.test(normalizedModelId)
+  ) {
+    return "openai_images";
+  }
+
+  return fallback;
+}
+
 function isImage2ModelId(modelId: string) {
   const normalizedModelId = modelId.trim().toLowerCase();
   return normalizedModelId === "gpt-image-2" || normalizedModelId === "gptimage2" || normalizedModelId === "image2";
@@ -603,6 +616,7 @@ app.post("/api/generate", async (request, response) => {
   try {
     assertGenerateRequest(request.body);
     const input = request.body;
+    input.protocol = resolveProtocolFromModelName(input.modelName, input.protocol);
     const timeoutMs = Math.max(1, input.timeoutMinutes ?? 10) * 60 * 1000;
     const generators: Record<ProviderProtocol, () => Promise<GeneratedImage[]>> = {
       gemini_generate_content: () => generateWithGemini(input, timeoutMs),
