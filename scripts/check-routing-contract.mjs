@@ -19,7 +19,9 @@ assert(!api.includes('fetch("/api/generate"'), "Image generation must not call t
 assert(api.includes("return target.toString();"), "Provider requests must go directly to the configured Base URL.");
 assert(api.includes('model.protocol === "openai_images"'), "Duplicate model IDs must prefer openai_images protocol in the browser client.");
 assert(server.includes('model.protocol === "openai_images"'), "Duplicate model IDs must prefer openai_images protocol in the local server.");
-assert(app.includes("selectedModel?.protocol ?? workspace.protocol"), "Generation must use the selected model protocol instead of stale workspace storage.");
+assert(api.includes("resolveProtocolFromModelName"), "Browser client must resolve stale protocols from image model names.");
+assert(server.includes("resolveProtocolFromModelName"), "Local server must resolve stale protocols from image model names.");
+assert(app.includes("selectedModel?.protocol ?? resolveProtocolFromModelName"), "Generation must use the selected model protocol before falling back through model-name inference.");
 assert(app.includes("protocol: generationProtocol"), "Generation requests and history must record the resolved model protocol.");
 assert(!rewriteSources.includes("/api/:path*"), "Vercel must not proxy removed /api wrapper paths.");
 assert(!rewriteSources.includes("/v1/:path*"), "Vercel must not proxy /v1 provider calls.");

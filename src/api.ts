@@ -267,6 +267,19 @@ function inferOpenAiModelProtocol(modelId: string): ProviderProtocol {
   return isOpenAiImageModelId(modelId) ? "openai_images" : "openai_chat_completions";
 }
 
+export function resolveProtocolFromModelName(modelId: string, fallback: ProviderProtocol): ProviderProtocol {
+  const normalizedModelId = modelId.trim().toLowerCase();
+  if (
+    normalizedModelId.includes("dall-e") ||
+    normalizedModelId.includes("gpt-image") ||
+    /\bgpt[-\d.]*-image(?:-\d+)?\b/u.test(normalizedModelId)
+  ) {
+    return "openai_images";
+  }
+
+  return fallback;
+}
+
 function isImage2ModelId(modelId: string) {
   const normalizedModelId = modelId.trim().toLowerCase();
   return normalizedModelId === "gpt-image-2" || normalizedModelId === "gptimage2" || normalizedModelId === "image2";
