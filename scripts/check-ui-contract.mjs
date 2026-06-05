@@ -80,6 +80,26 @@ assert(styles.includes('font-size: clamp(28px, 3vw, 42px);'), "Image Studio bran
 assert(app.includes("generationTasks"), "Generation flow must expose per-image task cards.");
 assert(app.includes("generation-task-grid"), "Result panel must render generation task cards.");
 assert(styles.includes(".generation-task-card"), "Generation task cards must have dedicated styling.");
+assert(
+  app.includes('disabled={task.status === "queued" || task.status === "running"}'),
+  "Failed generation task cards must stay interactive so the full error can be inspected."
+);
+assert(
+  app.includes('title={task.status === "failed" ? task.message : undefined}'),
+  "Failed generation task cards must expose the full error text."
+);
+assert(
+  app.includes('task.status === "failed" ? task.message : task.prompt ? `${task.message} · ${task.prompt}` : task.message'),
+  "Failed generation task cards must show the error without appending the prompt."
+);
+assert(
+  styles.includes(".generation-task-card.is-failed .generation-task-copy small") &&
+    styles.includes("-webkit-line-clamp: unset;") &&
+    styles.includes("overflow-wrap: anywhere;"),
+  "Failed generation task errors must not be clamped or overflow the card."
+);
+assert(!app.includes("lightboxImage"), "Generated result images must not open a large preview lightbox.");
+assert(!styles.includes(".lightbox"), "Generated result image lightbox styling must be removed.");
 assert(app.includes("toUserFacingError"), "App must convert technical errors into user-facing Chinese messages.");
 assert(api.includes("toUserFacingError"), "Provider API layer must expose Chinese error normalization.");
 

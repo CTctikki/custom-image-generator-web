@@ -506,7 +506,6 @@ export default function App() {
   const [isApiKeyVisible, setIsApiKeyVisible] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [isHistorySidebarOpen, setIsHistorySidebarOpen] = useState(false);
-  const [lightboxImage, setLightboxImage] = useState<HistoryItem | null>(null);
   const [caseLibraryItems, setCaseLibraryItems] = useState<CaseLibraryItem[]>([]);
   const [caseLibraryCategories, setCaseLibraryCategories] = useState<string[]>([]);
   const [casePromptsById, setCasePromptsById] = useState<CasePromptMap>({});
@@ -1252,32 +1251,16 @@ export default function App() {
   };
 
   const openTaskResult = (task: GenerationTask) => {
+    if (task.status === "failed") {
+      setStatusMessage(task.message);
+      return;
+    }
+
     if (!task.historyId) {
       return;
     }
 
-    const item = history.find((candidate) => candidate.id === task.historyId);
-    if (item) {
-      setSelectedHistoryId(item.id);
-      setLightboxImage(item);
-      return;
-    }
-
-    if (task.imageDataUrl && task.mimeType && task.createdAt) {
-      setLightboxImage({
-        id: task.historyId,
-        imageDataUrl: task.imageDataUrl,
-        mimeType: task.mimeType,
-        prompt: task.prompt ?? workspace.prompt,
-        modelName: workspace.modelName,
-        protocol: workspace.protocol,
-        aspectRatio: task.aspectRatio ?? workspace.aspectRatio,
-        imageSize: workspace.imageSize,
-        seed: task.seed,
-        inputImageNames: inputImages.map((image) => image.name),
-        createdAt: task.createdAt
-      });
-    }
+    setSelectedHistoryId(task.historyId);
   };
 
   const toggleHistorySelection = (historyId: string) => {
@@ -1732,9 +1715,10 @@ export default function App() {
                 {generationTasks.map((task) => (
                   <button
                     className={`generation-task-card is-${task.status}`}
-                    disabled={task.status !== "success"}
+                    disabled={task.status === "queued" || task.status === "running"}
                     key={task.id}
                     onClick={() => openTaskResult(task)}
+                    title={task.status === "failed" ? task.message : undefined}
                     type="button"
                   >
                     <span className="generation-task-index">{String(task.index + 1).padStart(2, "0")}</span>
@@ -1754,7 +1738,9 @@ export default function App() {
                         {task.status === "success" ? "已完成" : task.status === "failed" ? "生成失败" : task.status === "queued" ? "排队中" : "生成中"}
                         {task.status === "success" ? <CheckCircle2 size={14} /> : null}
                       </strong>
-                      <small>{task.prompt ? `${task.message} · ${task.prompt}` : task.message}</small>
+                      <small>
+                        {task.status === "failed" ? task.message : task.prompt ? `${task.message} · ${task.prompt}` : task.message}
+                      </small>
                     </span>
                   </button>
                 ))}
@@ -1763,9 +1749,9 @@ export default function App() {
 
             {visibleHistoryItem ? (
               <div className="output-content">
-                <button className="output-image-button" onClick={() => setLightboxImage(visibleHistoryItem)} type="button">
+                <div className="output-image-frame">
                   <img alt={visibleHistoryItem.prompt} src={visibleHistoryItem.imageDataUrl} />
-                </button>
+                </div>
                 <div className="output-actions">
                   <div>
                     <strong>{visibleHistoryItem.modelName}</strong>
@@ -2141,17 +2127,6 @@ export default function App() {
               </button>
             </div>
           </section>
-        </div>
-      ) : null}
-
-      {lightboxImage ? (
-        <div className="lightbox" onClick={() => setLightboxImage(null)} role="dialog" aria-label="图片预览">
-          <div className="lightbox-inner" onClick={(event) => event.stopPropagation()}>
-            <button className="icon-button lightbox-close" onClick={() => setLightboxImage(null)} type="button">
-              <X size={18} />
-            </button>
-            <img alt={lightboxImage.prompt} src={lightboxImage.imageDataUrl} />
-          </div>
         </div>
       ) : null}
     </div>
