@@ -15,6 +15,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  ShoppingBag,
   SlidersHorizontal,
   Sun,
   Trash2,
@@ -35,6 +36,15 @@ import {
 } from "react";
 import { fetchProviderModels, generateImage, resolveProtocolFromModelName, toUserFacingError } from "./api";
 import { CASE_LIBRARY_SOURCE, loadCaseLibrary, loadCasePrompt, type CaseLibraryItem, type CasePromptMap } from "./caseLibrary";
+import {
+  DEFAULT_ECOMMERCE_IMAGE_MODEL,
+  DEFAULT_ECOMMERCE_TEXT_MODEL,
+  ECOMMERCE_IMAGE_TASKS,
+  generateEcommerceImages,
+  generateProductCopy,
+  type EcommerceImageTaskType,
+  type ProductCopy
+} from "./ecommerceGeneration";
 import { resolveGenerationParallelism, settleGenerationTasks } from "./generationExecution";
 import { createGenerationPlan, MAX_GENERATION_COUNT, parsePromptQueue, resolveEffectiveAspectRatio } from "./generationPlan";
 import { loadStoredHistory, saveStoredHistory } from "./historyStore";
@@ -94,7 +104,7 @@ const CASE_CATEGORY_LABELS: Record<string, string> = {
 };
 
 type GenerationTaskStatus = "queued" | "running" | "success" | "failed";
-type ActiveView = "studio" | "cases";
+type ActiveView = "studio" | "cases" | "ecommerce";
 type CaseImageLoadState = "loading" | "loaded" | "failed";
 
 interface CaseGridMetrics {
@@ -118,6 +128,47 @@ interface GenerationTask {
   mimeType?: string;
   createdAt?: string;
   historyId?: string;
+}
+
+interface EcommerceResultTask {
+  type: EcommerceImageTaskType;
+  label: string;
+  title: string;
+  name: string;
+  status: GenerationTaskStatus;
+  message: string;
+  prompt?: string;
+  imageDataUrl?: string;
+  mimeType?: string;
+  createdAt?: string;
+  historyId?: string;
+}
+
+const EMPTY_ECOMMERCE_COPY: ProductCopy = {
+  sellingPoints: ["", "", ""],
+  longTitle: "",
+  shortTitle: ""
+};
+
+function createEcommerceResultTasks(status: GenerationTaskStatus = "queued", message = "待生成"): EcommerceResultTask[] {
+  return ECOMMERCE_IMAGE_TASKS.map((task) => ({
+    ...task,
+    status,
+    message
+  }));
+}
+
+function normalizeEcommerceCopy(copy: ProductCopy): ProductCopy {
+  return {
+    sellingPoints: [0, 1, 2].map((index) => copy.sellingPoints[index]?.trim() ?? ""),
+    longTitle: copy.longTitle.trim(),
+    shortTitle: copy.shortTitle.trim()
+  };
+}
+
+function isEcommerceCopyComplete(copy: ProductCopy) {
+  const normalized = normalizeEcommerceCopy(copy);
+  return normalized.longTitle.length > 0 && normalized.shortTitle.length > 0 && normalized.sellingPoints.every(Boolean);
 }
 
 function getCaseGridColumnCount(width: number) {
@@ -502,6 +553,13 @@ export default function App() {
   const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
   const [generationTasks, setGenerationTasks] = useState<GenerationTask[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [ecommerceProductTitle, setEcommerceProductTitle] = useState("");
+  const [ecommerceProductImage, setEcommerceProductImage] = useState<InputImage | null>(null);
+  const [ecommerceTextModel, setEcommerceTextModel] = useState(DEFAULT_ECOMMERCE_TEXT_MODEL);
+  const [ecommerceImageModel, setEcommerceImageModel] = useState(DEFAULT_ECOMMERCE_IMAGE_MODEL);
+  const [ecommerceCopy, setEcommerceCopy] = useState<ProductCopy>(EMPTY_ECOMMERCE_COPY);
+  const [ecommerceResults, setEcommerceResults] = useState<EcommerceResultTask[]>(() => createEcommerceResultTasks());
+  const [isEcommerceGenerating, setIsEcommerceGenerating] = useState(false);
   const [statusMessage, setStatusMessage] = useState("工作台就绪。");
   const [isApiKeyVisible, setIsApiKeyVisible] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
@@ -537,6 +595,7 @@ export default function App() {
   const firstCaseCardRef = useRef<HTMLButtonElement | null>(null);
   const caseGridMeasureFrameRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const ecommerceFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedInputImage = inputImages[selectedInputIndex] ?? null;
   const visibleHistoryItem = useMemo(() => {
@@ -621,6 +680,16 @@ export default function App() {
     workspace.baseUrl.trim().length > 0 &&
     workspace.modelName.trim().length > 0 &&
     modelOptions.some((model) => model.id === workspace.modelName);
+  const ecommerceCopyIsComplete = isEcommerceCopyComplete(ecommerceCopy);
+  const canGenerateEcommerceImages =
+    !isEcommerceGenerating &&
+    workspace.baseUrl.trim().length > 0 &&
+    workspace.apiKey.trim().length > 0 &&
+    ecommerceProductTitle.trim().length > 0 &&
+    ecommerceProductImage !== null &&
+    ecommerceImageModel.trim().length > 0;
+  const canGenerateEcommerce = canGenerateEcommerceImages && ecommerceTextModel.trim().length > 0;
+  const canRegenerateEcommerceImages = canGenerateEcommerceImages && ecommerceCopyIsComplete;
   const visibleStatusMessage =
     activeView === "cases"
       ? statusMessage.startsWith("已复制案例") || statusMessage.startsWith("已将案例")
@@ -629,7 +698,8 @@ export default function App() {
           ? "案例库加载中..."
           : caseLibraryError || `案例库就绪：${caseLibraryTotal || caseLibraryItems.length} 个案例。`
       : statusMessage;
-  const isStatusBusy = activeView === "cases" ? isCaseLibraryLoading : isGenerating || isLoadingModels;
+  const isStatusBusy =
+    activeView === "cases" ? isCaseLibraryLoading : activeView === "ecommerce" ? isEcommerceGenerating : isGenerating || isLoadingModels;
 
   const measureCaseGrid = useCallback(() => {
     const viewport = caseGridViewportRef.current;
@@ -702,6 +772,14 @@ export default function App() {
     resetCaseGridWindow();
     setActiveView("cases");
   }, [resetCaseGridWindow]);
+
+  const openEcommerceView = useCallback(() => {
+    setIsMobileCaseDetailOpen(false);
+    setIsManagingHistory(false);
+    setIsHistorySidebarOpen(false);
+    setActiveView("ecommerce");
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, []);
 
   const updateWorkspace = useCallback((patch: Partial<WorkspaceState>) => {
     setWorkspace((current) => ({ ...current, ...patch }));
@@ -1124,6 +1202,191 @@ export default function App() {
     setInputImages((current) => current.filter((_, itemIndex) => itemIndex !== index));
   };
 
+  const addEcommerceProductImage = async (files: File[]) => {
+    const imageFile = files.find((file) => file.type.startsWith("image/"));
+    if (!imageFile) {
+      setStatusMessage("请选择商品图片。");
+      return;
+    }
+
+    try {
+      const image = await fileToCompressedInputImage(imageFile);
+      setEcommerceProductImage(image);
+      setStatusMessage(`已载入商品图：${image.name}。`);
+    } catch (error) {
+      setStatusMessage(compactError(error));
+    }
+  };
+
+  const handleEcommerceProductImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = "";
+    await addEcommerceProductImage(files);
+  };
+
+  const handleEcommerceProductImageDrop = async (event: DragEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    await addEcommerceProductImage(Array.from(event.dataTransfer.files));
+  };
+
+  const updateEcommerceSellingPoint = (index: number, value: string) => {
+    setEcommerceCopy((current) => {
+      const sellingPoints = [...normalizeEcommerceCopy(current).sellingPoints];
+      sellingPoints[index] = value;
+      return {
+        ...current,
+        sellingPoints
+      };
+    });
+  };
+
+  const runEcommerceImageGeneration = async (copy: ProductCopy) => {
+    const productImage = ecommerceProductImage;
+    const productTitle = ecommerceProductTitle.trim();
+    const apiKey = workspace.apiKey.trim();
+    const baseUrl = workspace.baseUrl.trim();
+    const imageModel = ecommerceImageModel.trim();
+    const normalizedCopy = normalizeEcommerceCopy(copy);
+
+    if (!apiKey) {
+      throw new Error("请先在全局设置里填写 API Key。");
+    }
+    if (!baseUrl) {
+      throw new Error("请先在全局设置里填写 Base URL。");
+    }
+    if (!productTitle) {
+      throw new Error("请先填写商品标题。");
+    }
+    if (!productImage) {
+      throw new Error("请先上传商品图。");
+    }
+    if (!imageModel) {
+      throw new Error("请填写图片模型。");
+    }
+    if (!isEcommerceCopyComplete(normalizedCopy)) {
+      throw new Error("请先生成或补全三个卖点、长标题和短标题。");
+    }
+
+    setEcommerceResults(createEcommerceResultTasks("running", "正在生成"));
+
+    const results = await generateEcommerceImages({
+      apiKey,
+      baseUrl,
+      imageModel,
+      productImage,
+      productTitle,
+      copy: normalizedCopy
+    });
+    const createdItems: HistoryItem[] = [];
+    const nextTasks = results.map((result) => {
+      if (result.status === "success") {
+        const generated = result.image;
+        const historyItem: HistoryItem = {
+          id: generated.id,
+          imageDataUrl: generated.image.dataUrl,
+          mimeType: generated.image.mimeType,
+          prompt: generated.prompt,
+          modelName: imageModel,
+          protocol: "openai_images",
+          aspectRatio: "1:1",
+          imageSize: "2K",
+          inputImageNames: [productImage.name],
+          createdAt: generated.createdAt
+        };
+        createdItems.push(historyItem);
+
+        return {
+          type: result.type,
+          label: result.label,
+          title: result.title,
+          name: result.name,
+          status: "success" as const,
+          message: "生成完成",
+          prompt: generated.prompt,
+          imageDataUrl: historyItem.imageDataUrl,
+          mimeType: historyItem.mimeType,
+          createdAt: historyItem.createdAt,
+          historyId: historyItem.id
+        };
+      }
+
+      return {
+        type: result.type,
+        label: result.label,
+        title: result.title,
+        name: result.name,
+        status: "failed" as const,
+        message: compactError(result.error)
+      };
+    });
+
+    setEcommerceResults(nextTasks);
+
+    if (createdItems.length === 0) {
+      const firstError = results.find((result) => result.status === "failed");
+      throw new Error(firstError?.status === "failed" ? firstError.error : "电商图片生成失败。");
+    }
+
+    const newestItem = createdItems.at(-1);
+    setHistory((current) => [...createdItems.reverse(), ...current].slice(0, HISTORY_LIMIT));
+    if (newestItem) {
+      setSelectedHistoryId(newestItem.id);
+    }
+
+    const failedCount = results.length - createdItems.length;
+    setStatusMessage(
+      failedCount > 0 ? `电商生图完成 ${createdItems.length}/4 张，另有 ${failedCount} 张失败。` : "电商生图完成：4 张图已写入历史。"
+    );
+  };
+
+  const runEcommerceGenerate = async () => {
+    if (!canGenerateEcommerce) {
+      setStatusMessage("请先填写全局 API Key/Base URL，并在电商生图里填写商品标题、商品图、文本模型和图片模型。");
+      return;
+    }
+
+    setIsEcommerceGenerating(true);
+    setEcommerceResults(createEcommerceResultTasks("queued", "等待文案"));
+    setStatusMessage("正在生成商品卖点和标题...");
+
+    try {
+      const copy = await generateProductCopy({
+        apiKey: workspace.apiKey.trim(),
+        baseUrl: workspace.baseUrl.trim(),
+        model: ecommerceTextModel.trim(),
+        productTitle: ecommerceProductTitle.trim()
+      });
+      const normalizedCopy = normalizeEcommerceCopy(copy);
+      setEcommerceCopy(normalizedCopy);
+      setStatusMessage("文案已生成，正在并发生成4张图...");
+      await runEcommerceImageGeneration(normalizedCopy);
+    } catch (error) {
+      setStatusMessage(compactError(error));
+    } finally {
+      setIsEcommerceGenerating(false);
+    }
+  };
+
+  const regenerateEcommerceImages = async () => {
+    if (!canRegenerateEcommerceImages) {
+      setStatusMessage("请先上传商品图，并补全三个卖点、长标题和短标题。");
+      return;
+    }
+
+    setIsEcommerceGenerating(true);
+    setStatusMessage("正在按当前文案重新生成4张图...");
+
+    try {
+      const normalizedCopy = normalizeEcommerceCopy(ecommerceCopy);
+      setEcommerceCopy(normalizedCopy);
+      await runEcommerceImageGeneration(normalizedCopy);
+    } catch (error) {
+      setStatusMessage(compactError(error));
+    } finally {
+      setIsEcommerceGenerating(false);
+    }
+  };
+
   const runGenerate = async () => {
     if (!canGenerate) {
       setStatusMessage("请先填写提示词，并从当前 Base URL 获取模型。");
@@ -1358,6 +1621,14 @@ export default function App() {
             >
               <ImageIcon size={16} />
               案例专区
+            </button>
+            <button
+              className={activeView === "ecommerce" ? "is-active" : ""}
+              onClick={openEcommerceView}
+              type="button"
+            >
+              <ShoppingBag size={16} />
+              电商生图
             </button>
           </nav>
         </div>
@@ -1876,6 +2147,183 @@ export default function App() {
         </div>
       </aside>
       </div>
+      ) : activeView === "ecommerce" ? (
+        <main className="ecommerce-page" aria-label="电商生图">
+          <section className="panel ecommerce-panel ecommerce-input-panel" aria-label="电商商品信息">
+            <div className="section-heading">
+              <span>01</span>
+              <h2>商品信息</h2>
+            </div>
+
+            <div className="ecommerce-connection">
+              <span>全局 Base URL</span>
+              <strong>{workspace.baseUrl.trim() || DEFAULT_BASE_URL}</strong>
+            </div>
+
+            <label className="field">
+              <span>商品标题</span>
+              <input
+                onChange={(event) => setEcommerceProductTitle(event.currentTarget.value)}
+                placeholder="例如：山茶花补水面霜女保湿修护"
+                value={ecommerceProductTitle}
+              />
+            </label>
+
+            <div className="field">
+              <span>商品图</span>
+              <input
+                accept="image/*"
+                className="visually-hidden"
+                onChange={(event) => void handleEcommerceProductImageChange(event)}
+                ref={ecommerceFileInputRef}
+                type="file"
+              />
+              <button
+                className={`upload-dropzone ecommerce-product-dropzone ${ecommerceProductImage ? "has-image" : ""}`}
+                onClick={() => ecommerceFileInputRef.current?.click()}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => void handleEcommerceProductImageDrop(event)}
+                type="button"
+              >
+                {ecommerceProductImage ? (
+                  <img alt={ecommerceProductImage.name} src={ecommerceProductImage.dataUrl} />
+                ) : (
+                  <div className="empty-upload">
+                    <UploadCloud size={34} />
+                    <strong>上传商品底图</strong>
+                    <span>白底图或随手拍都可以</span>
+                  </div>
+                )}
+              </button>
+              {ecommerceProductImage ? (
+                <div className="ecommerce-file-row">
+                  <span>{ecommerceProductImage.name}</span>
+                  <button className="text-button small" onClick={() => setEcommerceProductImage(null)} type="button">
+                    移除
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="field-row">
+              <label className="field">
+                <span>文本模型</span>
+                <input
+                  onChange={(event) => setEcommerceTextModel(event.currentTarget.value)}
+                  value={ecommerceTextModel}
+                />
+              </label>
+              <label className="field">
+                <span>图片模型</span>
+                <input
+                  onChange={(event) => setEcommerceImageModel(event.currentTarget.value)}
+                  value={ecommerceImageModel}
+                />
+              </label>
+            </div>
+
+            <button className="run-button" disabled={!canGenerateEcommerce} onClick={() => void runEcommerceGenerate()} type="button">
+              {isEcommerceGenerating ? <Loader2 className="spin" size={20} /> : <Play size={20} />}
+              一键生成
+            </button>
+          </section>
+
+          <section className="panel ecommerce-panel ecommerce-copy-panel" aria-label="电商文案">
+            <div className="section-heading">
+              <span>02</span>
+              <h2>卖点与标题</h2>
+            </div>
+
+            <div className="ecommerce-copy-grid">
+              {ecommerceCopy.sellingPoints.map((point, index) => (
+                <label className="field" key={index}>
+                  <span>卖点 {index + 1}</span>
+                  <input
+                    onChange={(event) => updateEcommerceSellingPoint(index, event.currentTarget.value)}
+                    placeholder={index === 0 ? "高转化短卖点" : "继续补充卖点"}
+                    value={point}
+                  />
+                </label>
+              ))}
+            </div>
+
+            <label className="field">
+              <span>长标题</span>
+              <textarea
+                className="ecommerce-title-textarea"
+                onChange={(event) => setEcommerceCopy((current) => ({ ...current, longTitle: event.currentTarget.value }))}
+                placeholder="生成后可在这里微调长标题"
+                value={ecommerceCopy.longTitle}
+              />
+            </label>
+
+            <label className="field">
+              <span>短标题</span>
+              <input
+                onChange={(event) => setEcommerceCopy((current) => ({ ...current, shortTitle: event.currentTarget.value }))}
+                placeholder="适合放在结果卡片或图上"
+                value={ecommerceCopy.shortTitle}
+              />
+            </label>
+
+            <button
+              className="text-button ecommerce-regenerate-button"
+              disabled={!canRegenerateEcommerceImages}
+              onClick={() => void regenerateEcommerceImages()}
+              type="button"
+            >
+              <RefreshCw className={isEcommerceGenerating ? "spin" : ""} size={17} />
+              重新生成4张图
+            </button>
+          </section>
+
+          <section className="panel ecommerce-panel ecommerce-output-panel" aria-label="电商生成结果">
+            <div className="section-heading">
+              <span>03</span>
+              <h2>本次结果</h2>
+            </div>
+
+            <div className="ecommerce-results-grid">
+              {ecommerceResults.map((task) => (
+                <article className={`ecommerce-result-card is-${task.status}`} key={task.type}>
+                  <div className="ecommerce-result-preview">
+                    {task.imageDataUrl ? (
+                      <img alt={task.label} src={task.imageDataUrl} />
+                    ) : task.status === "failed" ? (
+                      <X size={30} />
+                    ) : task.status === "running" ? (
+                      <Loader2 className="spin" size={30} />
+                    ) : (
+                      <ImageIcon size={30} />
+                    )}
+                  </div>
+                  <div className="ecommerce-result-body">
+                    <strong>{task.label}</strong>
+                    <span>{task.status === "success" ? "已写入历史记录" : task.message}</span>
+                  </div>
+                  {task.imageDataUrl ? (
+                    <div className="ecommerce-result-actions">
+                      <button
+                        className="text-button small"
+                        onClick={() =>
+                          downloadDataUrl({
+                            dataUrl: task.imageDataUrl ?? "",
+                            mimeType: task.mimeType ?? "image/png",
+                            createdAt: task.createdAt
+                          })
+                        }
+                        type="button"
+                      >
+                        <Download size={15} />
+                        下载
+                      </button>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          </section>
+        </main>
       ) : (
         <main className="case-library-page" aria-label="案例专区">
           <section className="case-library-main" aria-label="案例浏览">
