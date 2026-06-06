@@ -5,11 +5,16 @@ const types = readFileSync(new URL("../src/types.ts", import.meta.url), "utf8");
 const index = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const api = readFileSync(new URL("../src/api.ts", import.meta.url), "utf8");
+const ecommerce = readFileSync(new URL("../src/ecommerceGeneration.ts", import.meta.url), "utf8");
 
 function assert(condition, message) {
   if (!condition) {
     throw new Error(message);
   }
+}
+
+function assertMatch(value, pattern, message) {
+  assert(pattern.test(value), message);
 }
 
 assert(
@@ -102,5 +107,74 @@ assert(!app.includes("lightboxImage"), "Generated result images must not open a 
 assert(!styles.includes(".lightbox"), "Generated result image lightbox styling must be removed.");
 assert(app.includes("toUserFacingError"), "App must convert technical errors into user-facing Chinese messages.");
 assert(api.includes("toUserFacingError"), "Provider API layer must expose Chinese error normalization.");
+
+assertMatch(
+  app,
+  /type\s+ActiveView\s*=\s*[^;]*"studio"[^;]*"cases"[^;]*"ecommerce"/s,
+  "Top-level navigation state must include the ecommerce generation view."
+);
+assert(
+  app.includes("view-tabs") && app.includes(">Image Studio<") && app.includes("案例专区") && app.includes("电商生图"),
+  "Top bar must render 电商生图 beside Image Studio and 案例专区."
+);
+assert(app.includes('from "./ecommerceGeneration"'), "App must import ecommerce generation helpers.");
+[
+  "DEFAULT_ECOMMERCE_TEXT_MODEL",
+  "DEFAULT_ECOMMERCE_IMAGE_MODEL",
+  "ECOMMERCE_IMAGE_TASKS",
+  "generateProductCopy",
+  "generateEcommerceImages"
+].forEach((name) => {
+  assert(app.includes(name), `App must use ${name} from the ecommerce generation module.`);
+});
+assert(ecommerce.includes("generateEcommerceImages"), "Ecommerce service must expose the four-image generation orchestrator.");
+assert(
+  app.includes("ecommerceProductTitle") && app.includes("商品标题"),
+  "Ecommerce UI must expose a product title input."
+);
+assert(
+  app.includes("ecommerceProductImage") && (app.includes("商品图") || app.includes("商品图片") || app.includes("商品底图")),
+  "Ecommerce UI must expose a product image upload control."
+);
+assert(
+  app.includes("ecommerceTextModel") && (app.includes("文本模型") || app.includes("文案模型")),
+  "Ecommerce UI must expose an editable text model input."
+);
+assert(
+  app.includes("ecommerceImageModel") && app.includes("图片模型"),
+  "Ecommerce UI must expose an editable image model input."
+);
+assert(
+  app.includes("runEcommerceGenerate") && app.includes("一键生成"),
+  "Ecommerce UI must expose a one-click generation action."
+);
+assertMatch(
+  app,
+  /regenerateEcommerceImages[\s\S]*(重新生成图片|重新生成4张图|重新生成 4 张图)|(重新生成图片|重新生成4张图|重新生成 4 张图)[\s\S]*regenerateEcommerceImages/,
+  "Ecommerce UI must expose an action to regenerate the generated images."
+);
+assert(
+  app.includes("ECOMMERCE_IMAGE_TASKS") &&
+    ["main", "scene", "sellingPoints", "whiteBackground"].every((type) => ecommerce.includes(`type: "${type}"`)) &&
+    ["主图", "场景图", "卖点图", "白底图"].every((label) => ecommerce.includes(label)),
+  "Ecommerce results must cover 主图、场景图、卖点图、白底图."
+);
+assert(
+  app.includes("HistoryItem") &&
+    app.includes("setHistory") &&
+    app.includes('protocol: "openai_images"') &&
+    app.includes('aspectRatio: "1:1"') &&
+    app.includes('imageSize: "2K"'),
+  "Successful ecommerce results must be written to history as fixed 1:1 2K OpenAI image items."
+);
+assert(
+  app.includes("ecommerce-page") &&
+    app.includes("ecommerce-panel") &&
+    app.includes("ecommerce-results-grid") &&
+    styles.includes(".ecommerce-page") &&
+    styles.includes(".ecommerce-panel") &&
+    styles.includes(".ecommerce-results-grid"),
+  "Ecommerce page, panel, and results grid must have dedicated static classes."
+);
 
 console.log("UI contract checks passed.");
