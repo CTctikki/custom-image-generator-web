@@ -170,8 +170,14 @@ assert.throws(
 );
 
 const mainPrompt = buildEcommerceImagePrompt("main", productTitle, productCopy);
-assertIncludes(mainPrompt, "20%-25%", "Main image prompt should reserve product scale");
-assertIncludes(mainPrompt, "左下角", "Main image prompt should position selling point copy");
+assertIncludes(mainPrompt, "20%-25%", "Main image prompt should reserve the lower-left blank area");
+assertIncludes(mainPrompt, "左下角", "Main image prompt should mention the lower-left area");
+assertIncludes(mainPrompt, "留白", "Main image prompt should describe the lower-left area as blank space");
+assert.doesNotMatch(
+  mainPrompt,
+  /(商品主体|主体).{0,12}(占比|比例).{0,12}20%-25%|20%-25%.{0,12}(商品主体|主体).{0,12}(占比|比例)/u,
+  "Main image prompt must not describe 20%-25% as the product scale"
+);
 assertIncludes(mainPrompt, "1:1", "Main image prompt should require square output");
 
 const scenePrompt = buildEcommerceImagePrompt("scene", productTitle, productCopy);
