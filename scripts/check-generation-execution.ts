@@ -62,4 +62,33 @@ assertArrayEqual(
   "Execution should preserve result order"
 );
 
+const retriedAttempts: number[] = [];
+const retried = await settleGenerationTasks(
+  [1],
+  async (task) => {
+    retriedAttempts.push(task);
+    if (retriedAttempts.length === 1) {
+      throw new Error("temporary upstream failure");
+    }
+    return "recovered";
+  },
+  { maxAttempts: 2, retryDelayMs: 0 }
+);
+
+assertArrayEqual(retriedAttempts, [1, 1], "Execution should retry a failed task when retry attempts are configured");
+assertArrayEqual(retried.map((result) => result.status), ["fulfilled"], "Retried task should settle with its recovered result");
+
+let skippedRetryAttempts = 0;
+const skippedRetry = await settleGenerationTasks(
+  [1],
+  async () => {
+    skippedRetryAttempts += 1;
+    throw new Error("permanent failure");
+  },
+  { maxAttempts: 3, retryDelayMs: 0, shouldRetry: () => false }
+);
+
+assertEqual(skippedRetryAttempts, 1, "Execution should honor shouldRetry=false without extra attempts");
+assertArrayEqual(skippedRetry.map((result) => result.status), ["rejected"], "Permanent failures should remain rejected");
+
 console.log("Generation execution checks passed.");

@@ -5,6 +5,7 @@ const types = readFileSync(new URL("../src/types.ts", import.meta.url), "utf8");
 const index = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const api = readFileSync(new URL("../src/api.ts", import.meta.url), "utf8");
+const ecommerce = readFileSync(new URL("../src/ecommerceGeneration.ts", import.meta.url), "utf8");
 
 function assert(condition, message) {
   if (!condition) {
@@ -12,13 +13,37 @@ function assert(condition, message) {
   }
 }
 
+function assertMatch(value, pattern, message) {
+  assert(pattern.test(value), message);
+}
+
 assert(
   app.includes('const DEFAULT_BASE_URL = "https://api.lts4ai.com"') && app.includes("baseUrl: DEFAULT_BASE_URL"),
   "Default Base URL must be https://api.lts4ai.com."
 );
 assert(app.includes("const INPUT_IMAGE_LIMIT = 12;"), "Reference image upload limit must be 12.");
-assert(app.includes("imageFiles.slice(0, action.mode === \"replace\" ? 1 : INPUT_IMAGE_LIMIT)"), "Batch upload must honor the image limit.");
+assert(app.includes("const MAX_TOTAL_INPUT_IMAGE_BYTES = 15 * 1024 * 1024;"), "Reference image uploads must cap original file size at 15MB.");
+assert(
+  app.includes("const INPUT_IMAGE_COMPRESSED_TARGET_BYTES = 2 * 1024 * 1024;"),
+  "Reference image uploads must have a stable compressed upload target."
+);
+assert(
+  app.includes("const INPUT_IMAGE_COMPRESSION_QUALITY_STEPS =") &&
+    app.includes("const INPUT_IMAGE_COMPRESSION_DIMENSION_STEPS ="),
+  "Reference image compression must use multiple quality and dimension fallback steps."
+);
+assert(
+  app.includes('const selectedImageFiles = imageFiles.slice(0, action.mode === "replace" ? 1 : INPUT_IMAGE_LIMIT);'),
+  "Batch upload must honor the image limit before preparing images."
+);
+assert(
+  app.includes("async function prepareInputImages") && app.includes("await prepareInputImages(selectedImageFiles)"),
+  "Batch upload must prepare compressed reference images sequentially for stability."
+);
 assert(app.includes("inputImages.length >= INPUT_IMAGE_LIMIT"), "Add-image control must disable at the image limit.");
+assert(types.includes("originalSize"), "InputImage must keep track of the original uploaded file size.");
+assert(app.includes("const totalOriginalInputImageBytes ="), "Workbench must calculate the total original reference image size.");
+assert(app.includes("const isInputImageSizeWithinLimit = totalOriginalInputImageBytes <= MAX_TOTAL_INPUT_IMAGE_BYTES;"), "Workbench must track whether the original upload total is within the 15MB limit.");
 
 assert(
   app.includes('"http://64.186.244.43:12001"') && app.includes("LEGACY_DEFAULT_BASE_URLS"),
@@ -37,6 +62,7 @@ assert(types.includes("seedLocked"), "WorkspaceState must expose seedLocked for 
 assert(app.includes("同提示词 N 张") && app.includes("多提示词队列"), "Prompt generation mode switch must be rendered.");
 assert(app.includes("parsePromptQueue"), "Prompt queue mode must parse one prompt per line.");
 assert(app.includes("resolveEffectiveAspectRatio"), "Adaptive mode must follow the first reference image when dimensions are available.");
+assert(app.includes('!isInputImageSizeWithinLimit') && app.includes("参考图原图总大小已超过 15MB"), "The run guard must block oversized original image totals with a Chinese message.");
 
 assert(index.includes("<title>image studio-你的专属生图台</title>"), "Browser tab title must use the Image Studio branding.");
 assert(index.includes('rel="icon"') && index.includes("/image-studio-icon.svg"), "Browser tab must use the Image Studio icon.");
@@ -78,6 +104,7 @@ assert(
 );
 assert(styles.includes('font-size: clamp(28px, 3vw, 42px);'), "Image Studio brand size must remain unchanged.");
 assert(app.includes("generationTasks"), "Generation flow must expose per-image task cards.");
+assert(app.includes('disabled={!canGenerate}') && app.includes("isInputImageSizeWithinLimit"), "Run button gating must include the 15MB original image limit.");
 assert(app.includes("generation-task-grid"), "Result panel must render generation task cards.");
 assert(styles.includes(".generation-task-card"), "Generation task cards must have dedicated styling.");
 assert(
@@ -102,5 +129,80 @@ assert(!app.includes("lightboxImage"), "Generated result images must not open a 
 assert(!styles.includes(".lightbox"), "Generated result image lightbox styling must be removed.");
 assert(app.includes("toUserFacingError"), "App must convert technical errors into user-facing Chinese messages.");
 assert(api.includes("toUserFacingError"), "Provider API layer must expose Chinese error normalization.");
+assert(app.includes("当前原图总大小") && app.includes("15MB"), "Upload panel must show the live original-size total and the 15MB cap.");
+
+assertMatch(
+  app,
+  /type\s+ActiveView\s*=\s*[^;]*"studio"[^;]*"cases"[^;]*"ecommerce"/s,
+  "Top-level navigation state must include the ecommerce generation view."
+);
+assert(
+  app.includes("view-tabs") && app.includes(">Image Studio<") && app.includes("案例专区") && app.includes("电商生图"),
+  "Top bar must render 电商生图 beside Image Studio and 案例专区."
+);
+assert(app.includes('from "./ecommerceGeneration"'), "App must import ecommerce generation helpers.");
+[
+  "DEFAULT_ECOMMERCE_TEXT_MODEL",
+  "DEFAULT_ECOMMERCE_IMAGE_MODEL",
+  "ECOMMERCE_IMAGE_TASKS",
+  "generateProductCopy",
+  "generateEcommerceImages"
+].forEach((name) => {
+  assert(app.includes(name), `App must use ${name} from the ecommerce generation module.`);
+});
+assert(ecommerce.includes("generateEcommerceImages"), "Ecommerce service must expose the four-image generation orchestrator.");
+assert(
+  app.includes("ecommerceProductTitle") && app.includes("商品标题"),
+  "Ecommerce UI must expose a product title input."
+);
+assert(
+  app.includes("ecommerceProductImage") && (app.includes("商品图") || app.includes("商品图片") || app.includes("商品底图")),
+  "Ecommerce UI must expose a product image upload control."
+);
+assert(
+  app.includes("ecommerceTextModel") && (app.includes("文本模型") || app.includes("文案模型")),
+  "Ecommerce UI must expose an editable text model input."
+);
+assert(
+  app.includes("ecommerceImageModel") && app.includes("图片模型"),
+  "Ecommerce UI must expose an editable image model input."
+);
+assertMatch(
+  app,
+  /<select[\s\S]*setEcommerceTextModel[\s\S]*ecommerceTextModelOptions[\s\S]*<\/select>[\s\S]*<select[\s\S]*setEcommerceImageModel[\s\S]*ecommerceImageModelOptions[\s\S]*<\/select>/,
+  "Ecommerce text and image model controls must be dropdowns backed by model options."
+);
+assert(
+  app.includes("runEcommerceGenerate") && app.includes("一键生成"),
+  "Ecommerce UI must expose a one-click generation action."
+);
+assertMatch(
+  app,
+  /regenerateEcommerceImages[\s\S]*(重新生成图片|重新生成4张图|重新生成 4 张图)|(重新生成图片|重新生成4张图|重新生成 4 张图)[\s\S]*regenerateEcommerceImages/,
+  "Ecommerce UI must expose an action to regenerate the generated images."
+);
+assert(
+  app.includes("ECOMMERCE_IMAGE_TASKS") &&
+    ["main", "scene", "sellingPoints", "whiteBackground"].every((type) => ecommerce.includes(`type: "${type}"`)) &&
+    ["主图", "场景图", "卖点图", "白底图"].every((label) => ecommerce.includes(label)),
+  "Ecommerce results must cover 主图、场景图、卖点图、白底图."
+);
+assert(
+  app.includes("HistoryItem") &&
+    app.includes("setHistory") &&
+    app.includes('protocol: "openai_images"') &&
+    app.includes('aspectRatio: "1:1"') &&
+    app.includes('imageSize: "2K"'),
+  "Successful ecommerce results must be written to history as fixed 1:1 2K OpenAI image items."
+);
+assert(
+  app.includes("ecommerce-page") &&
+    app.includes("ecommerce-panel") &&
+    app.includes("ecommerce-results-grid") &&
+    styles.includes(".ecommerce-page") &&
+    styles.includes(".ecommerce-panel") &&
+    styles.includes(".ecommerce-results-grid"),
+  "Ecommerce page, panel, and results grid must have dedicated static classes."
+);
 
 console.log("UI contract checks passed.");

@@ -26,6 +26,7 @@ export interface InputImage {
   data: string;
   dataUrl: string;
   size: number;
+  originalSize: number;
   width?: number;
   height?: number;
 }

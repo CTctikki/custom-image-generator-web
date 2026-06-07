@@ -64,11 +64,15 @@ if (api.includes('body.append("image[]"') || server.includes('body.append("image
 }
 
 if (!api.includes("toOpenAiImageSize(workspace.aspectRatio, workspace.imageSize)")) {
-  throw new Error("OpenAI Images requests must pass imageSize into toOpenAiImageSize.");
+  throw new Error("OpenAI image generations must pass imageSize into toOpenAiImageSize.");
 }
 
 if (!server.includes("toOpenAiImageSize(input.aspectRatio, input.imageSize)")) {
-  throw new Error("Local server OpenAI Images requests must pass imageSize into toOpenAiImageSize.");
+  throw new Error("Local server OpenAI image generations must pass imageSize into toOpenAiImageSize.");
+}
+
+if (api.includes("toOpenAiImageEditSize") || server.includes("toOpenAiImageEditSize")) {
+  throw new Error("Image edits must keep the existing 4K size mapping instead of using a separate edit-size fallback.");
 }
 
 if (api.includes('headers: requestHeaders(workspace.apiKey, workspace.baseUrl, "multipart/form-data")')) {
