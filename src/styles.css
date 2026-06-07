@@ -1159,6 +1159,10 @@ h2 {
   line-height: 1.45;
 }
 
+.upload-size-hint.is-over-limit {
+  color: #c03f39;
+}
+
 .field-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

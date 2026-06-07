@@ -218,6 +218,14 @@ export function toUserFacingError(error: unknown) {
     return "上游返回了非标准响应，可能是接口临时异常，请稍后重试。";
   }
 
+  if (
+    normalized.includes("did not return image output") ||
+    normalized.includes("no image output") ||
+    normalized.includes("without image output")
+  ) {
+    return "上游没有返回图片结果，可能是本次参考图组合、提示词或模型临时状态导致只返回了文本/空结果；请重试，或调整提示词、减少参考图后再试。";
+  }
+
   if (normalized.includes("abort") || normalized.includes("timeout")) {
     return "请求超时，请稍后重试，或减少一次生成的图片数量。";
   }

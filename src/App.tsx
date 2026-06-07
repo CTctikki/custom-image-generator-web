@@ -57,6 +57,7 @@ const ANNOUNCEMENT_STORAGE_KEY = "image-studio-announcement-version";
 const DEFAULT_MODEL_MIGRATION_KEY = "custom-image-default-model-migration";
 const DEFAULT_MODEL_MIGRATION_VERSION = "image2-2026-06-03";
 const INPUT_IMAGE_LIMIT = 12;
+const MAX_TOTAL_INPUT_IMAGE_BYTES = 15 * 1024 * 1024;
 const HISTORY_LIMIT = 40;
 const DEFAULT_BASE_URL = "https://api.lts4ai.com";
 const LEGACY_DEFAULT_BASE_URLS = new Set(["http://64.186.244.43:12001"]);
@@ -278,8 +279,10 @@ function readImageDimensions(dataUrl: string): Promise<{ width: number; height: 
 }
 
 const INPUT_IMAGE_COMPRESSION_THRESHOLD_BYTES = 3 * 1024 * 1024;
+const INPUT_IMAGE_COMPRESSED_TARGET_BYTES = 2 * 1024 * 1024;
 const INPUT_IMAGE_MAX_DIMENSION = 2560;
-const INPUT_IMAGE_JPEG_QUALITY = 0.86;
+const INPUT_IMAGE_COMPRESSION_DIMENSION_STEPS = [INPUT_IMAGE_MAX_DIMENSION, 2200, 1800, 1536] as const;
+const INPUT_IMAGE_COMPRESSION_QUALITY_STEPS = [0.86, 0.78, 0.7, 0.62] as const;
 
 function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality?: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
@@ -298,7 +301,7 @@ function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality?: num
 }
 
 async function compressInputImage(file: File): Promise<File> {
-  if (file.size <= INPUT_IMAGE_COMPRESSION_THRESHOLD_BYTES) {
+  if (file.size <= INPUT_IMAGE_COMPRESSION_THRESHOLD_BYTES && file.size <= INPUT_IMAGE_COMPRESSED_TARGET_BYTES) {
     return file;
   }
 
@@ -311,34 +314,51 @@ async function compressInputImage(file: File): Promise<File> {
       image.src = objectUrl;
     });
 
-    const scale = Math.min(1, INPUT_IMAGE_MAX_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight));
-    const width = Math.max(1, Math.round(image.naturalWidth * scale));
-    const height = Math.max(1, Math.round(image.naturalHeight * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d");
-    if (!context) {
-      return file;
-    }
-
-    context.drawImage(image, 0, 0, width, height);
-    const blob = await canvasToBlob(canvas, "image/jpeg", INPUT_IMAGE_JPEG_QUALITY);
-    if (blob.size >= file.size) {
+    const maxNaturalDimension = Math.max(image.naturalWidth, image.naturalHeight);
+    if (maxNaturalDimension <= 0) {
       return file;
     }
 
     const baseName = file.name.replace(/\.[^.]+$/, "") || "input";
-    return new File([blob], `${baseName}-compressed.jpg`, {
-      type: "image/jpeg",
-      lastModified: Date.now()
-    });
+    let bestCompressedFile: File | null = null;
+
+    for (const dimensionLimit of INPUT_IMAGE_COMPRESSION_DIMENSION_STEPS) {
+      const scale = Math.min(1, dimensionLimit / maxNaturalDimension);
+      const width = Math.max(1, Math.round(image.naturalWidth * scale));
+      const height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        return bestCompressedFile && bestCompressedFile.size < file.size ? bestCompressedFile : file;
+      }
+
+      context.drawImage(image, 0, 0, width, height);
+      for (const quality of INPUT_IMAGE_COMPRESSION_QUALITY_STEPS) {
+        const blob = await canvasToBlob(canvas, "image/jpeg", quality);
+        const compressedFile = new File([blob], `${baseName}-compressed.jpg`, {
+          type: "image/jpeg",
+          lastModified: Date.now()
+        });
+
+        if (!bestCompressedFile || compressedFile.size < bestCompressedFile.size) {
+          bestCompressedFile = compressedFile;
+        }
+
+        if (compressedFile.size <= INPUT_IMAGE_COMPRESSED_TARGET_BYTES) {
+          return compressedFile;
+        }
+      }
+    }
+
+    return bestCompressedFile && bestCompressedFile.size < file.size ? bestCompressedFile : file;
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
 }
 
-function fileToInputImage(file: File): Promise<InputImage> {
+function fileToInputImage(file: File, originalSize = file.size): Promise<InputImage> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error(`读取失败：${file.name}`));
@@ -353,6 +373,7 @@ function fileToInputImage(file: File): Promise<InputImage> {
         data: parsed.data,
         dataUrl,
         size: file.size,
+        originalSize,
         width: dimensions?.width,
         height: dimensions?.height
       });
@@ -362,7 +383,15 @@ function fileToInputImage(file: File): Promise<InputImage> {
 }
 
 async function fileToCompressedInputImage(file: File): Promise<InputImage> {
-  return fileToInputImage(await compressInputImage(file));
+  return fileToInputImage(await compressInputImage(file), file.size);
+}
+
+async function prepareInputImages(files: File[]): Promise<InputImage[]> {
+  const images: InputImage[] = [];
+  for (const file of files) {
+    images.push(await fileToCompressedInputImage(file));
+  }
+  return images;
 }
 
 function readableSize(bytes: number) {
@@ -445,6 +474,26 @@ function pickDefaultModel(models: ProviderModelOption[], currentModelName: strin
   }
 
   return models[0] ?? null;
+}
+
+function isEcommerceImageModelOption(model: ProviderModelOption) {
+  return model.protocol === "openai_images" || /image|dall-e|imagen/iu.test(model.id);
+}
+
+function withFallbackModelOption(
+  models: ProviderModelOption[],
+  currentModelName: string,
+  fallbackModelName: string,
+  protocol: ProviderModelOption["protocol"]
+) {
+  const optionIds = new Set(models.map((model) => model.id));
+  const fallbackId = currentModelName.trim() || fallbackModelName;
+
+  if (!fallbackId || optionIds.has(fallbackId)) {
+    return models;
+  }
+
+  return [{ id: fallbackId, protocol }, ...models];
 }
 
 interface CaseLibraryDetailPanelProps {
@@ -609,6 +658,26 @@ export default function App() {
     () => modelOptions.find((model) => model.id === workspace.modelName) ?? null,
     [modelOptions, workspace.modelName]
   );
+  const ecommerceTextModelOptions = useMemo(
+    () =>
+      withFallbackModelOption(
+        modelOptions.filter((model) => !isEcommerceImageModelOption(model)),
+        ecommerceTextModel,
+        DEFAULT_ECOMMERCE_TEXT_MODEL,
+        "openai_chat_completions"
+      ),
+    [ecommerceTextModel, modelOptions]
+  );
+  const ecommerceImageModelOptions = useMemo(
+    () =>
+      withFallbackModelOption(
+        modelOptions.filter(isEcommerceImageModelOption),
+        ecommerceImageModel,
+        DEFAULT_ECOMMERCE_IMAGE_MODEL,
+        "openai_images"
+      ),
+    [ecommerceImageModel, modelOptions]
+  );
   const filteredCaseLibrary = useMemo(() => {
     const query = caseLibraryQuery.trim().toLowerCase();
     return caseLibraryItems.filter((caseItem) => {
@@ -669,6 +738,11 @@ export default function App() {
     workspace.promptMode === "queue"
       ? Math.min(MAX_GENERATION_COUNT, promptQueue.length)
       : Math.min(MAX_GENERATION_COUNT, Math.max(1, Number.parseInt(String(workspace.concurrency), 10) || 1));
+  const totalOriginalInputImageBytes = useMemo(
+    () => inputImages.reduce((sum, image) => sum + image.originalSize, 0),
+    [inputImages]
+  );
+  const isInputImageSizeWithinLimit = totalOriginalInputImageBytes <= MAX_TOTAL_INPUT_IMAGE_BYTES;
   const effectiveAspectRatio = useMemo(
     () => resolveEffectiveAspectRatio(workspace.aspectRatio, inputImages),
     [inputImages, workspace.aspectRatio]
@@ -677,6 +751,7 @@ export default function App() {
     !isGenerating &&
     !isLoadingModels &&
     plannedTaskCount > 0 &&
+    isInputImageSizeWithinLimit &&
     workspace.baseUrl.trim().length > 0 &&
     workspace.modelName.trim().length > 0 &&
     modelOptions.some((model) => model.id === workspace.modelName);
@@ -1169,19 +1244,26 @@ export default function App() {
     }
 
     try {
-      const nextImages = await Promise.all(
-        imageFiles.slice(0, action.mode === "replace" ? 1 : INPUT_IMAGE_LIMIT).map(fileToCompressedInputImage)
-      );
+      const selectedImageFiles = imageFiles.slice(0, action.mode === "replace" ? 1 : INPUT_IMAGE_LIMIT);
+      const nextImages = await prepareInputImages(selectedImageFiles);
+      let updatedImages: InputImage[] = [];
       setInputImages((current) => {
         if (action.mode === "replace" && action.index !== null) {
           const cloned = [...current];
           cloned[action.index] = nextImages[0];
-          return cloned.filter(Boolean).slice(0, INPUT_IMAGE_LIMIT);
+          updatedImages = cloned.filter(Boolean).slice(0, INPUT_IMAGE_LIMIT);
+          return updatedImages;
         }
         const remainingSlots = INPUT_IMAGE_LIMIT - current.length;
-        return [...current, ...nextImages.slice(0, Math.max(0, remainingSlots))];
+        updatedImages = [...current, ...nextImages.slice(0, Math.max(0, remainingSlots))];
+        return updatedImages;
       });
-      setStatusMessage(`已载入 ${nextImages.length} 张参考图。`);
+      const totalOriginalBytes = updatedImages.reduce((sum, image) => sum + image.originalSize, 0);
+      setStatusMessage(
+        totalOriginalBytes > MAX_TOTAL_INPUT_IMAGE_BYTES
+          ? "参考图原图总大小已超过 15MB，请减少图片数量或更换更小的图片后再运行。"
+          : `已载入 ${nextImages.length} 张参考图。`
+      );
     } catch (error) {
       setStatusMessage(compactError(error));
     }
@@ -1388,6 +1470,11 @@ export default function App() {
   };
 
   const runGenerate = async () => {
+    if (!isInputImageSizeWithinLimit) {
+      setStatusMessage("参考图原图总大小已超过 15MB，请减少图片数量或更换更小的图片后再运行。");
+      return;
+    }
+
     if (!canGenerate) {
       setStatusMessage("请先填写提示词，并从当前 Base URL 获取模型。");
       return;
@@ -1485,7 +1572,10 @@ export default function App() {
         }
       };
 
-      const results = await settleGenerationTasks(taskInputs, runTask);
+      const results = await settleGenerationTasks(taskInputs, runTask, {
+        maxAttempts: inputImages.length > 0 ? 2 : 1,
+        retryDelayMs: inputImages.length > 0 ? 800 : 0
+      });
       const fulfilled = results.filter((result): result is PromiseFulfilledResult<HistoryItem> => result.status === "fulfilled");
       const rejected = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
 
@@ -1972,6 +2062,11 @@ export default function App() {
               <Plus size={22} />
             </button>
           </div>
+
+          <span className={`field-hint upload-size-hint ${isInputImageSizeWithinLimit ? "" : "is-over-limit"}`}>
+            当前原图总大小 {readableSize(totalOriginalInputImageBytes)} / 15MB
+            {isInputImageSizeWithinLimit ? "。" : "，已超过上限，请减少参考图后再运行。"}
+          </span>
         </section>
 
         <section className="output-region" aria-label="结果">
@@ -2208,17 +2303,39 @@ export default function App() {
             <div className="field-row">
               <label className="field">
                 <span>文本模型</span>
-                <input
+                <select
+                  disabled={isEcommerceGenerating}
                   onChange={(event) => setEcommerceTextModel(event.currentTarget.value)}
                   value={ecommerceTextModel}
-                />
+                >
+                  {isLoadingModels ? <option value={ecommerceTextModel}>正在获取模型...</option> : null}
+                  {!isLoadingModels && ecommerceTextModelOptions.length === 0 ? <option value="">未获取到文本模型</option> : null}
+                  {!isLoadingModels
+                    ? ecommerceTextModelOptions.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.id}
+                        </option>
+                      ))
+                    : null}
+                </select>
               </label>
               <label className="field">
                 <span>图片模型</span>
-                <input
+                <select
+                  disabled={isEcommerceGenerating}
                   onChange={(event) => setEcommerceImageModel(event.currentTarget.value)}
                   value={ecommerceImageModel}
-                />
+                >
+                  {isLoadingModels ? <option value={ecommerceImageModel}>正在获取模型...</option> : null}
+                  {!isLoadingModels && ecommerceImageModelOptions.length === 0 ? <option value="">未获取到图片模型</option> : null}
+                  {!isLoadingModels
+                    ? ecommerceImageModelOptions.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.id}
+                        </option>
+                      ))
+                    : null}
+                </select>
               </label>
             </div>
 

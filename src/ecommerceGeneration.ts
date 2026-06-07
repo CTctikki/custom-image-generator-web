@@ -1,3 +1,4 @@
+import { settleGenerationTasks } from "./generationExecution";
 import type { InputImage } from "./types";
 
 interface GeneratedImage {
@@ -533,13 +534,14 @@ export async function generateEcommerceImage(input: GenerateEcommerceImageInput)
 }
 
 export async function generateEcommerceImages(input: GenerateEcommerceImagesInput): Promise<EcommerceImageGenerationResult[]> {
-  const settled = await Promise.allSettled(
-    ECOMMERCE_IMAGE_TASKS.map((task) =>
+  const settled = await settleGenerationTasks(
+    ECOMMERCE_IMAGE_TASKS,
+    (task) =>
       generateEcommerceImage({
         ...input,
         type: task.type
-      })
-    )
+      }),
+    { maxAttempts: 2, retryDelayMs: 800 }
   );
 
   return settled.map((result, index) => {

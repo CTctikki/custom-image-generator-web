@@ -22,8 +22,28 @@ assert(
   "Default Base URL must be https://api.lts4ai.com."
 );
 assert(app.includes("const INPUT_IMAGE_LIMIT = 12;"), "Reference image upload limit must be 12.");
-assert(app.includes("imageFiles.slice(0, action.mode === \"replace\" ? 1 : INPUT_IMAGE_LIMIT)"), "Batch upload must honor the image limit.");
+assert(app.includes("const MAX_TOTAL_INPUT_IMAGE_BYTES = 15 * 1024 * 1024;"), "Reference image uploads must cap original file size at 15MB.");
+assert(
+  app.includes("const INPUT_IMAGE_COMPRESSED_TARGET_BYTES = 2 * 1024 * 1024;"),
+  "Reference image uploads must have a stable compressed upload target."
+);
+assert(
+  app.includes("const INPUT_IMAGE_COMPRESSION_QUALITY_STEPS =") &&
+    app.includes("const INPUT_IMAGE_COMPRESSION_DIMENSION_STEPS ="),
+  "Reference image compression must use multiple quality and dimension fallback steps."
+);
+assert(
+  app.includes('const selectedImageFiles = imageFiles.slice(0, action.mode === "replace" ? 1 : INPUT_IMAGE_LIMIT);'),
+  "Batch upload must honor the image limit before preparing images."
+);
+assert(
+  app.includes("async function prepareInputImages") && app.includes("await prepareInputImages(selectedImageFiles)"),
+  "Batch upload must prepare compressed reference images sequentially for stability."
+);
 assert(app.includes("inputImages.length >= INPUT_IMAGE_LIMIT"), "Add-image control must disable at the image limit.");
+assert(types.includes("originalSize"), "InputImage must keep track of the original uploaded file size.");
+assert(app.includes("const totalOriginalInputImageBytes ="), "Workbench must calculate the total original reference image size.");
+assert(app.includes("const isInputImageSizeWithinLimit = totalOriginalInputImageBytes <= MAX_TOTAL_INPUT_IMAGE_BYTES;"), "Workbench must track whether the original upload total is within the 15MB limit.");
 
 assert(
   app.includes('"http://64.186.244.43:12001"') && app.includes("LEGACY_DEFAULT_BASE_URLS"),
@@ -42,6 +62,7 @@ assert(types.includes("seedLocked"), "WorkspaceState must expose seedLocked for 
 assert(app.includes("同提示词 N 张") && app.includes("多提示词队列"), "Prompt generation mode switch must be rendered.");
 assert(app.includes("parsePromptQueue"), "Prompt queue mode must parse one prompt per line.");
 assert(app.includes("resolveEffectiveAspectRatio"), "Adaptive mode must follow the first reference image when dimensions are available.");
+assert(app.includes('!isInputImageSizeWithinLimit') && app.includes("参考图原图总大小已超过 15MB"), "The run guard must block oversized original image totals with a Chinese message.");
 
 assert(index.includes("<title>image studio-你的专属生图台</title>"), "Browser tab title must use the Image Studio branding.");
 assert(index.includes('rel="icon"') && index.includes("/image-studio-icon.svg"), "Browser tab must use the Image Studio icon.");
@@ -83,6 +104,7 @@ assert(
 );
 assert(styles.includes('font-size: clamp(28px, 3vw, 42px);'), "Image Studio brand size must remain unchanged.");
 assert(app.includes("generationTasks"), "Generation flow must expose per-image task cards.");
+assert(app.includes('disabled={!canGenerate}') && app.includes("isInputImageSizeWithinLimit"), "Run button gating must include the 15MB original image limit.");
 assert(app.includes("generation-task-grid"), "Result panel must render generation task cards.");
 assert(styles.includes(".generation-task-card"), "Generation task cards must have dedicated styling.");
 assert(
@@ -107,6 +129,7 @@ assert(!app.includes("lightboxImage"), "Generated result images must not open a 
 assert(!styles.includes(".lightbox"), "Generated result image lightbox styling must be removed.");
 assert(app.includes("toUserFacingError"), "App must convert technical errors into user-facing Chinese messages.");
 assert(api.includes("toUserFacingError"), "Provider API layer must expose Chinese error normalization.");
+assert(app.includes("当前原图总大小") && app.includes("15MB"), "Upload panel must show the live original-size total and the 15MB cap.");
 
 assertMatch(
   app,
@@ -143,6 +166,11 @@ assert(
 assert(
   app.includes("ecommerceImageModel") && app.includes("图片模型"),
   "Ecommerce UI must expose an editable image model input."
+);
+assertMatch(
+  app,
+  /<select[\s\S]*setEcommerceTextModel[\s\S]*ecommerceTextModelOptions[\s\S]*<\/select>[\s\S]*<select[\s\S]*setEcommerceImageModel[\s\S]*ecommerceImageModelOptions[\s\S]*<\/select>/,
+  "Ecommerce text and image model controls must be dropdowns backed by model options."
 );
 assert(
   app.includes("runEcommerceGenerate") && app.includes("一键生成"),
