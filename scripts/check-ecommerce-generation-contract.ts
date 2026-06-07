@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   DEFAULT_ECOMMERCE_IMAGE_MODEL,
+  DEFAULT_ECOMMERCE_IMAGE_SIZE,
   DEFAULT_ECOMMERCE_TEXT_MODEL,
   ECOMMERCE_IMAGE_TASKS,
   buildEcommerceImagePrompt,
@@ -117,6 +118,7 @@ assertIncludes(productCopyPrompt, "short_title", "Product copy prompt should req
 
 assert.equal(DEFAULT_ECOMMERCE_TEXT_MODEL, "gpt-5.5");
 assert.equal(DEFAULT_ECOMMERCE_IMAGE_MODEL, "gpt-image-2");
+assert.equal(DEFAULT_ECOMMERCE_IMAGE_SIZE, "1K");
 assert.deepEqual(
   ECOMMERCE_IMAGE_TASKS.map((task) => task.type),
   ["main", "scene", "sellingPoints", "whiteBackground"]
@@ -262,6 +264,7 @@ const generatedImage = await withMockedFetch(
       apiKey: "key",
       baseUrl: "https://api.lts4ai.com",
       imageModel: "gpt-image-2",
+      imageSize: "1K",
       productImage: sourceImage,
       productTitle,
       copy: productCopy,

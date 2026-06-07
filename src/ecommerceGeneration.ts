@@ -1,5 +1,5 @@
 import { settleGenerationTasks } from "./generationExecution";
-import type { InputImage } from "./types";
+import type { ImageSize, InputImage } from "./types";
 
 interface GeneratedImage {
   data: string;
@@ -50,6 +50,7 @@ export interface GenerateEcommerceImageInput {
   apiKey: string;
   baseUrl: string;
   imageModel: string;
+  imageSize: ImageSize;
   productImage: InputImage;
   productTitle: string;
   copy: ProductCopy;
@@ -78,7 +79,13 @@ export type EcommerceImageGenerationResult =
 
 export const DEFAULT_ECOMMERCE_TEXT_MODEL = "gpt-5.5";
 export const DEFAULT_ECOMMERCE_IMAGE_MODEL = "gpt-image-2";
-export const ECOMMERCE_IMAGE_SIZE = "1024x1024";
+export const DEFAULT_ECOMMERCE_IMAGE_SIZE: ImageSize = "1K";
+
+const ECOMMERCE_IMAGE_SIZE_BY_QUALITY: Record<ImageSize, string> = {
+  "1K": "1024x1024",
+  "2K": "2048x2048",
+  "4K": "2880x2880"
+};
 
 export const ECOMMERCE_IMAGE_TASKS: EcommerceImageTask[] = [
   { type: "main", label: "主图", title: "电商主图", name: "main" },
@@ -176,6 +183,10 @@ async function readResponseBody(response: Response) {
 
 function timeoutSignal(timeoutMs: number) {
   return typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(timeoutMs) : undefined;
+}
+
+export function toEcommerceOpenAiImageSize(imageSize: ImageSize) {
+  return ECOMMERCE_IMAGE_SIZE_BY_QUALITY[imageSize] ?? ECOMMERCE_IMAGE_SIZE_BY_QUALITY["1K"];
 }
 
 function base64ToBlob(data: string, mimeType: string) {
@@ -496,7 +507,7 @@ export async function generateEcommerceImage(input: GenerateEcommerceImageInput)
   const body = new FormData();
   body.append("model", input.imageModel);
   body.append("prompt", prompt);
-  body.append("size", ECOMMERCE_IMAGE_SIZE);
+  body.append("size", toEcommerceOpenAiImageSize(input.imageSize));
   body.append("output_format", "png");
   body.append("n", "1");
   body.append("image", base64ToBlob(input.productImage.data, input.productImage.mimeType), input.productImage.name || "product.png");
@@ -505,7 +516,7 @@ export async function generateEcommerceImage(input: GenerateEcommerceImageInput)
     method: "POST",
     headers: requestHeaders(input.apiKey, input.baseUrl, ""),
     body,
-    signal: timeoutSignal(10 * 60 * 1000)
+    signal: timeoutSignal((input.imageSize === "4K" ? 30 : 10) * 60 * 1000)
   });
 
   const raw = await readResponseBody(response);

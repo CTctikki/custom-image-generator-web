@@ -38,6 +38,7 @@ import { fetchProviderModels, generateImage, resolveProtocolFromModelName, toUse
 import { CASE_LIBRARY_SOURCE, loadCaseLibrary, loadCasePrompt, type CaseLibraryItem, type CasePromptMap } from "./caseLibrary";
 import {
   DEFAULT_ECOMMERCE_IMAGE_MODEL,
+  DEFAULT_ECOMMERCE_IMAGE_SIZE,
   DEFAULT_ECOMMERCE_TEXT_MODEL,
   ECOMMERCE_IMAGE_TASKS,
   generateEcommerceImages,
@@ -45,6 +46,12 @@ import {
   type EcommerceImageTaskType,
   type ProductCopy
 } from "./ecommerceGeneration";
+import {
+  loadStoredEcommerceHistory,
+  saveStoredEcommerceHistory,
+  type EcommerceHistoryImage,
+  type EcommerceHistoryItem
+} from "./ecommerceHistoryStore";
 import { resolveGenerationParallelism, settleGenerationTasks } from "./generationExecution";
 import { createGenerationPlan, MAX_GENERATION_COUNT, parsePromptQueue, resolveEffectiveAspectRatio } from "./generationPlan";
 import { loadStoredHistory, saveStoredHistory } from "./historyStore";
@@ -59,6 +66,7 @@ const DEFAULT_MODEL_MIGRATION_VERSION = "image2-2026-06-03";
 const INPUT_IMAGE_LIMIT = 12;
 const MAX_TOTAL_INPUT_IMAGE_BYTES = 15 * 1024 * 1024;
 const HISTORY_LIMIT = 40;
+const ECOMMERCE_HISTORY_LIMIT = 30;
 const DEFAULT_BASE_URL = "https://api.lts4ai.com";
 const LEGACY_DEFAULT_BASE_URLS = new Set(["http://64.186.244.43:12001"]);
 const LEGACY_DEFAULT_MODEL_NAMES = new Set(["gemini-3.1-flash-image"]);
@@ -606,8 +614,11 @@ export default function App() {
   const [ecommerceProductImage, setEcommerceProductImage] = useState<InputImage | null>(null);
   const [ecommerceTextModel, setEcommerceTextModel] = useState(DEFAULT_ECOMMERCE_TEXT_MODEL);
   const [ecommerceImageModel, setEcommerceImageModel] = useState(DEFAULT_ECOMMERCE_IMAGE_MODEL);
+  const [ecommerceImageSize, setEcommerceImageSize] = useState<ImageSize>(DEFAULT_ECOMMERCE_IMAGE_SIZE);
   const [ecommerceCopy, setEcommerceCopy] = useState<ProductCopy>(EMPTY_ECOMMERCE_COPY);
   const [ecommerceResults, setEcommerceResults] = useState<EcommerceResultTask[]>(() => createEcommerceResultTasks());
+  const [ecommerceHistory, setEcommerceHistory] = useState<EcommerceHistoryItem[]>([]);
+  const [isEcommerceHistoryLoaded, setIsEcommerceHistoryLoaded] = useState(false);
   const [isEcommerceGenerating, setIsEcommerceGenerating] = useState(false);
   const [statusMessage, setStatusMessage] = useState("工作台就绪。");
   const [isApiKeyVisible, setIsApiKeyVisible] = useState(false);
@@ -1153,6 +1164,48 @@ export default function App() {
   }, [history, isHistoryLoaded]);
 
   useEffect(() => {
+    let isActive = true;
+
+    loadStoredEcommerceHistory(ECOMMERCE_HISTORY_LIMIT)
+      .then((storedHistory) => {
+        if (isActive) {
+          setEcommerceHistory(storedHistory);
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setStatusMessage("电商历史任务库读取失败，本次仍可继续生成。");
+        }
+      })
+      .finally(() => {
+        if (isActive) {
+          setIsEcommerceHistoryLoaded(true);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isEcommerceHistoryLoaded) {
+      return;
+    }
+
+    let isActive = true;
+    saveStoredEcommerceHistory(ecommerceHistory, ECOMMERCE_HISTORY_LIMIT).catch(() => {
+      if (isActive) {
+        setStatusMessage("电商历史任务库保存失败，本次图片仍可打包下载。");
+      }
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [ecommerceHistory, isEcommerceHistoryLoaded]);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
       void loadModels("auto");
     }, 650);
@@ -1327,7 +1380,9 @@ export default function App() {
     const productTitle = ecommerceProductTitle.trim();
     const apiKey = workspace.apiKey.trim();
     const baseUrl = workspace.baseUrl.trim();
+    const textModel = ecommerceTextModel.trim();
     const imageModel = ecommerceImageModel.trim();
+    const imageSize = ecommerceImageSize;
     const normalizedCopy = normalizeEcommerceCopy(copy);
 
     if (!apiKey) {
@@ -1355,27 +1410,26 @@ export default function App() {
       apiKey,
       baseUrl,
       imageModel,
+      imageSize,
       productImage,
       productTitle,
       copy: normalizedCopy
     });
-    const createdItems: HistoryItem[] = [];
+    const createdImages: EcommerceHistoryImage[] = [];
     const nextTasks = results.map((result) => {
       if (result.status === "success") {
         const generated = result.image;
-        const historyItem: HistoryItem = {
-          id: generated.id,
+        const historyImage: EcommerceHistoryImage = {
+          type: result.type,
+          label: result.label,
+          title: result.title,
+          name: result.name,
           imageDataUrl: generated.image.dataUrl,
           mimeType: generated.image.mimeType,
           prompt: generated.prompt,
-          modelName: imageModel,
-          protocol: "openai_images",
-          aspectRatio: "1:1",
-          imageSize: "2K",
-          inputImageNames: [productImage.name],
           createdAt: generated.createdAt
         };
-        createdItems.push(historyItem);
+        createdImages.push(historyImage);
 
         return {
           type: result.type,
@@ -1385,10 +1439,10 @@ export default function App() {
           status: "success" as const,
           message: "生成完成",
           prompt: generated.prompt,
-          imageDataUrl: historyItem.imageDataUrl,
-          mimeType: historyItem.mimeType,
-          createdAt: historyItem.createdAt,
-          historyId: historyItem.id
+          imageDataUrl: historyImage.imageDataUrl,
+          mimeType: historyImage.mimeType,
+          createdAt: historyImage.createdAt,
+          historyId: generated.id
         };
       }
 
@@ -1404,20 +1458,29 @@ export default function App() {
 
     setEcommerceResults(nextTasks);
 
-    if (createdItems.length === 0) {
+    if (createdImages.length === 0) {
       const firstError = results.find((result) => result.status === "failed");
       throw new Error(firstError?.status === "failed" ? firstError.error : "电商图片生成失败。");
     }
 
-    const newestItem = createdItems.at(-1);
-    setHistory((current) => [...createdItems.reverse(), ...current].slice(0, HISTORY_LIMIT));
-    if (newestItem) {
-      setSelectedHistoryId(newestItem.id);
-    }
+    const historyItem: EcommerceHistoryItem = {
+      id: `ecommerce-task-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      productTitle,
+      productImageName: productImage.name,
+      productCopy: normalizedCopy,
+      textModel,
+      imageModel,
+      imageSize,
+      createdAt: new Date().toISOString(),
+      images: createdImages
+    };
+    setEcommerceHistory((current) => [historyItem, ...current].slice(0, ECOMMERCE_HISTORY_LIMIT));
 
-    const failedCount = results.length - createdItems.length;
+    const failedCount = results.length - createdImages.length;
     setStatusMessage(
-      failedCount > 0 ? `电商生图完成 ${createdItems.length}/4 张，另有 ${failedCount} 张失败。` : "电商生图完成：4 张图已写入历史。"
+      failedCount > 0
+        ? `电商生图完成 ${createdImages.length}/4 张，另有 ${failedCount} 张失败，已写入电商历史任务库。`
+        : "电商生图完成：4 张图已写入电商历史任务库。"
     );
   };
 
@@ -1467,6 +1530,90 @@ export default function App() {
     } finally {
       setIsEcommerceGenerating(false);
     }
+  };
+
+  const buildEcommerceDownloadItems = (images: EcommerceHistoryImage[], meta: Pick<EcommerceHistoryItem, "imageModel" | "imageSize" | "productTitle">) =>
+    images.map((image, index): HistoryItem => ({
+      id: `ecommerce-download-${image.type}-${index}-${image.createdAt}`,
+      imageDataUrl: image.imageDataUrl,
+      mimeType: image.mimeType,
+      prompt: image.prompt || meta.productTitle,
+      modelName: meta.imageModel,
+      protocol: "openai_images",
+      aspectRatio: "1:1",
+      imageSize: meta.imageSize,
+      inputImageNames: [],
+      createdAt: image.createdAt
+    }));
+
+  const downloadCurrentEcommerceResults = () => {
+    const images = ecommerceResults
+      .filter((task) => task.status === "success" && task.imageDataUrl)
+      .map((task): EcommerceHistoryImage => ({
+        type: task.type,
+        label: task.label,
+        title: task.title,
+        name: task.name,
+        imageDataUrl: task.imageDataUrl ?? "",
+        mimeType: task.mimeType ?? "image/png",
+        prompt: task.prompt ?? ecommerceProductTitle,
+        createdAt: task.createdAt ?? new Date().toISOString()
+      }));
+
+    if (images.length === 0) {
+      setStatusMessage("当前没有可打包下载的电商结果。");
+      return;
+    }
+
+    downloadHistoryAsZip(
+      buildEcommerceDownloadItems(images, {
+        imageModel: ecommerceImageModel,
+        imageSize: ecommerceImageSize,
+        productTitle: ecommerceProductTitle
+      })
+    );
+    setStatusMessage(`已打包下载 ${images.length} 张电商图片。`);
+  };
+
+  const downloadEcommerceHistoryItem = (item: EcommerceHistoryItem) => {
+    downloadHistoryAsZip(
+      buildEcommerceDownloadItems(item.images, {
+        imageModel: item.imageModel,
+        imageSize: item.imageSize,
+        productTitle: item.productTitle
+      })
+    );
+    setStatusMessage(`已打包下载「${item.productTitle}」的 ${item.images.length} 张图片。`);
+  };
+
+  const openEcommerceHistoryItem = (item: EcommerceHistoryItem) => {
+    setEcommerceProductTitle(item.productTitle);
+    setEcommerceCopy(item.productCopy);
+    setEcommerceTextModel(item.textModel);
+    setEcommerceImageModel(item.imageModel);
+    setEcommerceImageSize(item.imageSize);
+    setEcommerceResults(
+      ECOMMERCE_IMAGE_TASKS.map((task) => {
+        const image = item.images.find((candidate) => candidate.type === task.type);
+        return image
+          ? {
+              ...task,
+              status: "success" as const,
+              message: "来自电商历史任务库",
+              prompt: image.prompt,
+              imageDataUrl: image.imageDataUrl,
+              mimeType: image.mimeType,
+              createdAt: image.createdAt,
+              historyId: item.id
+            }
+          : {
+              ...task,
+              status: "failed" as const,
+              message: "这张图未保存在该历史任务中"
+            };
+      })
+    );
+    setStatusMessage(`已载入电商历史任务「${item.productTitle}」。`);
   };
 
   const runGenerate = async () => {
@@ -2339,6 +2486,22 @@ export default function App() {
               </label>
             </div>
 
+            <label className="field">
+              <span>画质</span>
+              <select
+                disabled={isEcommerceGenerating}
+                onChange={(event) => setEcommerceImageSize(event.currentTarget.value as ImageSize)}
+                value={ecommerceImageSize}
+              >
+                {IMAGE_SIZES.slice().reverse().map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+              <span className="field-hint">电商生图固定正方形，默认 1K；画质越高生成越慢。</span>
+            </label>
+
             <button className="run-button" disabled={!canGenerateEcommerce} onClick={() => void runEcommerceGenerate()} type="button">
               {isEcommerceGenerating ? <Loader2 className="spin" size={20} /> : <Play size={20} />}
               一键生成
@@ -2395,9 +2558,15 @@ export default function App() {
           </section>
 
           <section className="panel ecommerce-panel ecommerce-output-panel" aria-label="电商生成结果">
-            <div className="section-heading">
-              <span>03</span>
-              <h2>本次结果</h2>
+            <div className="ecommerce-panel-head">
+              <div className="section-heading">
+                <span>03</span>
+                <h2>本次结果</h2>
+              </div>
+              <button className="text-button" onClick={downloadCurrentEcommerceResults} type="button">
+                <Download size={17} />
+                打包下载本组
+              </button>
             </div>
 
             <div className="ecommerce-results-grid">
@@ -2416,7 +2585,7 @@ export default function App() {
                   </div>
                   <div className="ecommerce-result-body">
                     <strong>{task.label}</strong>
-                    <span>{task.status === "success" ? "已写入历史记录" : task.message}</span>
+                    <span>{task.status === "success" ? "已写入电商历史任务库" : task.message}</span>
                   </div>
                   {task.imageDataUrl ? (
                     <div className="ecommerce-result-actions">
@@ -2439,6 +2608,41 @@ export default function App() {
                 </article>
               ))}
             </div>
+          </section>
+
+          <section className="panel ecommerce-panel ecommerce-history-panel" aria-label="电商历史任务库">
+            <div className="ecommerce-panel-head">
+              <div className="section-heading">
+                <span>04</span>
+                <h2>电商历史</h2>
+              </div>
+              <span className="ecommerce-history-count">
+                {isEcommerceHistoryLoaded ? `${ecommerceHistory.length} 组任务` : "读取中"}
+              </span>
+            </div>
+
+            {!isEcommerceHistoryLoaded ? (
+              <div className="empty-history">正在读取电商历史任务库</div>
+            ) : ecommerceHistory.length === 0 ? (
+              <div className="empty-history">暂无电商历史任务</div>
+            ) : (
+              <div className="ecommerce-history-list">
+                {ecommerceHistory.map((item) => (
+                  <article className="ecommerce-history-card" key={item.id}>
+                    <button className="ecommerce-history-card-main" onClick={() => openEcommerceHistoryItem(item)} type="button">
+                      <strong>{item.productTitle}</strong>
+                      <span>
+                        {formatTime(item.createdAt)} · {item.imageSize} · {item.images.length} 张
+                      </span>
+                    </button>
+                    <button className="text-button small" onClick={() => downloadEcommerceHistoryItem(item)} type="button">
+                      <Download size={15} />
+                      打包下载
+                    </button>
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
         </main>
       ) : (

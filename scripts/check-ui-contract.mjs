@@ -150,6 +150,7 @@ assert(app.includes('from "./ecommerceGeneration"'), "App must import ecommerce 
 ].forEach((name) => {
   assert(app.includes(name), `App must use ${name} from the ecommerce generation module.`);
 });
+assert(app.includes("DEFAULT_ECOMMERCE_IMAGE_SIZE"), "App must use the default ecommerce image quality.");
 assert(ecommerce.includes("generateEcommerceImages"), "Ecommerce service must expose the four-image generation orchestrator.");
 assert(
   app.includes("ecommerceProductTitle") && app.includes("商品标题"),
@@ -173,6 +174,10 @@ assertMatch(
   "Ecommerce text and image model controls must be dropdowns backed by model options."
 );
 assert(
+  app.includes("ecommerceImageSize") && app.includes("画质") && app.includes('useState<ImageSize>(DEFAULT_ECOMMERCE_IMAGE_SIZE)'),
+  "Ecommerce UI must expose an image quality dropdown defaulting to 1K."
+);
+assert(
   app.includes("runEcommerceGenerate") && app.includes("一键生成"),
   "Ecommerce UI must expose a one-click generation action."
 );
@@ -188,12 +193,21 @@ assert(
   "Ecommerce results must cover 主图、场景图、卖点图、白底图."
 );
 assert(
-  app.includes("HistoryItem") &&
-    app.includes("setHistory") &&
-    app.includes('protocol: "openai_images"') &&
-    app.includes('aspectRatio: "1:1"') &&
-    app.includes('imageSize: "2K"'),
-  "Successful ecommerce results must be written to history as fixed 1:1 2K OpenAI image items."
+  app.includes("downloadCurrentEcommerceResults") && app.includes("downloadHistoryAsZip") && app.includes("打包下载本组"),
+  "Ecommerce results must support one-click ZIP download for the current group."
+);
+assert(
+  app.includes("EcommerceHistoryItem") &&
+    app.includes("loadStoredEcommerceHistory") &&
+    app.includes("saveStoredEcommerceHistory") &&
+    app.includes("setEcommerceHistory") &&
+    app.includes("ecommerce-history-panel"),
+  "Ecommerce results must be stored in a separate ecommerce task history library."
+);
+const ecommerceGenerationBlock = app.slice(app.indexOf("const runEcommerceImageGeneration"), app.indexOf("const runEcommerceGenerate"));
+assert(
+  ecommerceGenerationBlock.includes("setEcommerceHistory") && !ecommerceGenerationBlock.includes("setHistory("),
+  "Successful ecommerce results must not be written into the Image Studio workbench history."
 );
 assert(
   app.includes("ecommerce-page") &&

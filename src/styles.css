@@ -491,6 +491,22 @@ h2 {
   min-height: 100%;
 }
 
+.ecommerce-history-panel {
+  grid-column: 1 / -1;
+}
+
+.ecommerce-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ecommerce-panel-head .text-button {
+  flex: 0 0 auto;
+}
+
 .ecommerce-connection {
   display: grid;
   gap: 4px;
@@ -622,6 +638,59 @@ h2 {
   justify-content: flex-end;
   border-top: 1px solid var(--line);
   padding: 10px 12px;
+}
+
+.ecommerce-history-count {
+  flex: 0 0 auto;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.ecommerce-history-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.ecommerce-history-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  padding: 10px;
+}
+
+.ecommerce-history-card-main {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.ecommerce-history-card-main strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ecommerce-history-card-main span {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .case-library-main,
@@ -2332,7 +2401,16 @@ textarea {
     grid-column: auto;
   }
 
+  .ecommerce-panel-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .ecommerce-results-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ecommerce-history-card {
     grid-template-columns: 1fr;
   }
 
