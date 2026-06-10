@@ -2,6 +2,12 @@ import cors from "cors";
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  handleCreateEcommerceTaskRequest,
+  handleGetEcommerceTaskRequest,
+  handleListEcommerceTasksRequest
+} from "./ecommerce/http.js";
+import { getLocalObjectStorageRoot } from "./ecommerce/storage.js";
 
 type ProviderProtocol = "gemini_generate_content" | "openai_chat_completions" | "openai_images";
 type AspectRatio =
@@ -55,6 +61,7 @@ const distDir = path.resolve(__dirname, "../dist");
 
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: "80mb" }));
+app.use("/local-cos", express.static(getLocalObjectStorageRoot()));
 
 function normalizeBaseUrl(apiBaseUrl: string) {
   const url = new URL(apiBaseUrl.trim());
@@ -504,6 +511,21 @@ app.post("/api/models", async (request, response) => {
     const message = error instanceof Error ? error.message : "获取模型列表失败。";
     response.status(400).json({ error: message });
   }
+});
+
+app.post("/api/ecommerce/generate", async (request, response) => {
+  const result = await handleCreateEcommerceTaskRequest(request.body);
+  response.status(result.status).json(result.body);
+});
+
+app.get("/api/ecommerce/tasks", async (request, response) => {
+  const result = await handleListEcommerceTasksRequest(request.query);
+  response.status(result.status).json(result.body);
+});
+
+app.get("/api/ecommerce/tasks/:id", async (request, response) => {
+  const result = await handleGetEcommerceTaskRequest({ ...request.query, id: request.params.id });
+  response.status(result.status).json(result.body);
 });
 
 async function generateWithGemini(input: GenerateRequest, timeoutMs: number) {

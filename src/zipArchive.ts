@@ -79,6 +79,18 @@ function bytesFromDataUrl(dataUrl: string) {
   return bytes;
 }
 
+async function bytesFromImageSource(source: string) {
+  if (source.startsWith("data:")) {
+    return bytesFromDataUrl(source);
+  }
+
+  const response = await fetch(source);
+  if (!response.ok) {
+    throw new Error(`图片下载失败：${response.status}`);
+  }
+  return new Uint8Array(await response.arrayBuffer());
+}
+
 export function createZipBlob(entries: ZipEntry[]) {
   const fileRecords: Array<{ centralHeader: number[] }> = [];
   const output: number[] = [];
@@ -141,19 +153,23 @@ export function createZipBlob(entries: ZipEntry[]) {
   return new Blob([new Uint8Array(output)], { type: "application/zip" });
 }
 
-export function downloadHistoryAsZip(items: HistoryItem[]) {
-  const entries = items.map((item, index) => {
+export async function createHistoryZipBlob(items: HistoryItem[]) {
+  const entries = await Promise.all(items.map(async (item, index) => {
     const createdAt = new Date(item.createdAt);
     const timestamp = item.createdAt.replace(/[:.]/g, "-");
     const fileName = `${String(index + 1).padStart(2, "0")}-${sanitizeFileName(timestamp)}.${extensionFromMimeType(item.mimeType)}`;
     return {
       fileName,
-      bytes: bytesFromDataUrl(item.imageDataUrl),
+      bytes: await bytesFromImageSource(item.imageDataUrl),
       date: Number.isNaN(createdAt.getTime()) ? new Date() : createdAt
     };
-  });
+  }));
 
-  const zip = createZipBlob(entries);
+  return createZipBlob(entries);
+}
+
+export async function downloadHistoryAsZip(items: HistoryItem[]) {
+  const zip = await createHistoryZipBlob(items);
   const anchor = document.createElement("a");
   const objectUrl = URL.createObjectURL(zip);
   const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");

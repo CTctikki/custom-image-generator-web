@@ -1,9 +1,14 @@
 {
   "buildCommand": "npm run build:web",
   "outputDirectory": "dist",
+  "functions": {
+    "api/ecommerce/generate.ts": {
+      "maxDuration": 300
+    }
+  },
   "rewrites": [
     {
-      "source": "/((?!_vercel/image).*)",
+      "source": "/((?!api/|_vercel/image).*)",
       "destination": "/index.html"
     }
   ]

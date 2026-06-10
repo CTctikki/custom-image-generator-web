@@ -1,36 +1,98 @@
 import type { ProductCopy } from "./ecommerceGeneration";
-import type { ImageSize } from "./types";
+import type { ImageSize, InputImage } from "./types";
+
+export type EcommerceTaskStatus = "queued" | "running" | "completed" | "delivery_failed" | "failed";
+export type EcommerceHistoryImageStatus = "success" | "failed";
+
+export interface EcommerceCost {
+  amount: number | null;
+  currency: string | null;
+  detail?: Record<string, unknown>;
+}
 
 export interface EcommerceHistoryImage {
   type: string;
   label: string;
   title: string;
   name: string;
-  imageDataUrl: string;
-  mimeType: string;
+  imageDataUrl?: string;
+  cosUrl?: string | null;
+  objectKey?: string | null;
+  mimeType: string | null;
   prompt: string;
   createdAt: string;
+  status?: EcommerceHistoryImageStatus;
+  error?: string;
+  cost?: EcommerceCost | null;
 }
 
 export interface EcommerceHistoryItem {
   id: string;
   productTitle: string;
   productImageName: string;
+  productImage?: {
+    name: string;
+    mimeType: string;
+    objectKey: string | null;
+    cosUrl: string | null;
+    size: number;
+    width?: number;
+    height?: number;
+  };
   productCopy: ProductCopy;
   textModel: string;
   imageModel: string;
   imageSize: ImageSize;
   createdAt: string;
+  updatedAt?: string;
+  status?: EcommerceTaskStatus;
+  error?: string;
+  cost?: EcommerceCost | null;
+  userId?: string | null;
   images: EcommerceHistoryImage[];
 }
 
-const DB_NAME = "custom-image-generator-ecommerce-history";
-const DB_VERSION = 1;
-const STORE_NAME = "tasks";
+export interface CreateStoredEcommerceTaskInput {
+  apiKey: string;
+  baseUrl: string;
+  productTitle: string;
+  productImage: InputImage;
+  textModel: string;
+  imageModel: string;
+  imageSize: ImageSize;
+  copy?: ProductCopy;
+}
 
-function normalizeCopy(input: unknown): ProductCopy | null {
+export interface CreateStoredEcommerceTaskResult {
+  taskId: string;
+  task: EcommerceHistoryItem;
+}
+
+function defaultEcommerceApiBaseUrl() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? "" : "https://dy.ctikki.com";
+}
+
+const ECOMMERCE_API_BASE_URL = (import.meta.env.VITE_ECOMMERCE_API_BASE_URL || defaultEcommerceApiBaseUrl()).replace(
+  /\/+$/u,
+  ""
+);
+
+function ecommerceApiUrl(path: string) {
+  return `${ECOMMERCE_API_BASE_URL}${path}`;
+}
+
+const EMPTY_PRODUCT_COPY: ProductCopy = {
+  sellingPoints: ["", "", ""],
+  longTitle: "",
+  shortTitle: ""
+};
+
+function normalizeCopy(input: unknown): ProductCopy {
   if (!input || typeof input !== "object") {
-    return null;
+    return EMPTY_PRODUCT_COPY;
   }
 
   const candidate = input as Partial<ProductCopy>;
@@ -40,11 +102,10 @@ function normalizeCopy(input: unknown): ProductCopy | null {
 
   if (
     sellingPoints.length !== 3 ||
-    sellingPoints.some((point) => point.length === 0) ||
     typeof candidate.longTitle !== "string" ||
     typeof candidate.shortTitle !== "string"
   ) {
-    return null;
+    return EMPTY_PRODUCT_COPY;
   }
 
   return {
@@ -54,28 +115,63 @@ function normalizeCopy(input: unknown): ProductCopy | null {
   };
 }
 
+function normalizeTaskStatus(input: unknown): EcommerceTaskStatus {
+  return input === "queued" ||
+    input === "running" ||
+    input === "completed" ||
+    input === "delivery_failed" ||
+    input === "failed"
+    ? input
+    : "completed";
+}
+
 function normalizeImages(input: unknown): EcommerceHistoryImage[] {
   if (!Array.isArray(input)) {
     return [];
   }
 
-  return input.filter((item): item is EcommerceHistoryImage => {
-    if (!item || typeof item !== "object") {
-      return false;
-    }
+  return input
+    .map((item): EcommerceHistoryImage | null => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
 
-    const candidate = item as Partial<EcommerceHistoryImage>;
-    return (
-      typeof candidate.type === "string" &&
-      typeof candidate.label === "string" &&
-      typeof candidate.title === "string" &&
-      typeof candidate.name === "string" &&
-      typeof candidate.imageDataUrl === "string" &&
-      typeof candidate.mimeType === "string" &&
-      typeof candidate.prompt === "string" &&
-      typeof candidate.createdAt === "string"
-    );
-  });
+      const candidate = item as Partial<EcommerceHistoryImage>;
+      if (
+        typeof candidate.type !== "string" ||
+        typeof candidate.label !== "string" ||
+        typeof candidate.title !== "string" ||
+        typeof candidate.name !== "string" ||
+        typeof candidate.prompt !== "string" ||
+        typeof candidate.createdAt !== "string"
+      ) {
+        return null;
+      }
+
+      const imageDataUrl =
+        typeof candidate.imageDataUrl === "string"
+          ? candidate.imageDataUrl
+          : typeof candidate.cosUrl === "string"
+            ? candidate.cosUrl
+            : undefined;
+
+      return {
+        type: candidate.type,
+        label: candidate.label,
+        title: candidate.title,
+        name: candidate.name,
+        imageDataUrl,
+        cosUrl: typeof candidate.cosUrl === "string" ? candidate.cosUrl : null,
+        objectKey: typeof candidate.objectKey === "string" ? candidate.objectKey : null,
+        mimeType: typeof candidate.mimeType === "string" ? candidate.mimeType : null,
+        prompt: candidate.prompt,
+        createdAt: candidate.createdAt,
+        status: candidate.status === "failed" ? "failed" : "success",
+        error: typeof candidate.error === "string" ? candidate.error : undefined,
+        cost: candidate.cost ?? null
+      };
+    })
+    .filter((item): item is EcommerceHistoryImage => Boolean(item));
 }
 
 function normalizeEcommerceHistory(input: unknown, limit: number): EcommerceHistoryItem[] {
@@ -94,8 +190,6 @@ function normalizeEcommerceHistory(input: unknown, limit: number): EcommerceHist
       const productCopy = normalizeCopy(candidate.productCopy);
       const images = normalizeImages(candidate.images);
       if (
-        !productCopy ||
-        images.length === 0 ||
         typeof candidate.id !== "string" ||
         typeof candidate.productTitle !== "string" ||
         typeof candidate.productImageName !== "string" ||
@@ -111,11 +205,17 @@ function normalizeEcommerceHistory(input: unknown, limit: number): EcommerceHist
         id: candidate.id,
         productTitle: candidate.productTitle,
         productImageName: candidate.productImageName,
+        productImage: candidate.productImage,
         productCopy,
         textModel: candidate.textModel,
         imageModel: candidate.imageModel,
         imageSize: candidate.imageSize as ImageSize,
         createdAt: candidate.createdAt,
+        updatedAt: candidate.updatedAt,
+        status: normalizeTaskStatus(candidate.status),
+        error: typeof candidate.error === "string" ? candidate.error : undefined,
+        cost: candidate.cost ?? null,
+        userId: candidate.userId ?? null,
         images
       };
     })
@@ -130,81 +230,43 @@ function normalizeEcommerceHistory(input: unknown, limit: number): EcommerceHist
     .slice(0, limit);
 }
 
-function openEcommerceHistoryDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    if (typeof indexedDB === "undefined") {
-      reject(new Error("当前浏览器不支持 IndexedDB。"));
-      return;
-    }
-
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onerror = () => reject(new Error("电商历史任务库打开失败。"));
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: "id" });
-        store.createIndex("createdAt", "createdAt");
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-  });
-}
-
-function requestResult<T>(request: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    request.onerror = () => reject(request.error ?? new Error("电商历史任务库操作失败。"));
-    request.onsuccess = () => resolve(request.result);
-  });
-}
-
-function transactionDone(transaction: IDBTransaction): Promise<void> {
-  return new Promise((resolve, reject) => {
-    transaction.onerror = () => reject(transaction.error ?? new Error("电商历史任务库保存失败。"));
-    transaction.onabort = () => reject(transaction.error ?? new Error("电商历史任务库保存已取消。"));
-    transaction.oncomplete = () => resolve();
-  });
-}
-
-async function readIndexedEcommerceHistory(db: IDBDatabase, limit: number) {
-  const transaction = db.transaction(STORE_NAME, "readonly");
-  const done = transactionDone(transaction);
-  const items = await requestResult<EcommerceHistoryItem[]>(transaction.objectStore(STORE_NAME).getAll());
-  await done;
-  return normalizeEcommerceHistory(items, limit);
-}
-
-async function writeIndexedEcommerceHistory(db: IDBDatabase, history: EcommerceHistoryItem[], limit: number) {
-  const items = normalizeEcommerceHistory(history, limit);
-  const transaction = db.transaction(STORE_NAME, "readwrite");
-  const done = transactionDone(transaction);
-  const store = transaction.objectStore(STORE_NAME);
-  store.clear();
-  for (const item of items) {
-    store.put(item);
+async function readJsonResponse(response: Response) {
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(typeof body?.error === "string" ? body.error : `Request failed with status ${response.status}`);
   }
-  await done;
+  return body;
 }
 
 export async function loadStoredEcommerceHistory(limit: number): Promise<EcommerceHistoryItem[]> {
-  let db: IDBDatabase | null = null;
-
-  try {
-    db = await openEcommerceHistoryDb();
-    return await readIndexedEcommerceHistory(db, limit);
-  } catch {
-    return [];
-  } finally {
-    db?.close();
-  }
+  const response = await fetch(ecommerceApiUrl(`/api/ecommerce/tasks?limit=${encodeURIComponent(String(limit))}`));
+  const body = await readJsonResponse(response);
+  return normalizeEcommerceHistory(body.tasks, limit);
 }
 
-export async function saveStoredEcommerceHistory(history: EcommerceHistoryItem[], limit: number): Promise<void> {
-  let db: IDBDatabase | null = null;
-
-  try {
-    db = await openEcommerceHistoryDb();
-    await writeIndexedEcommerceHistory(db, history, limit);
-  } finally {
-    db?.close();
+export async function loadStoredEcommerceTask(taskId: string): Promise<EcommerceHistoryItem> {
+  const response = await fetch(ecommerceApiUrl(`/api/ecommerce/tasks/${encodeURIComponent(taskId)}`));
+  const body = await readJsonResponse(response);
+  const [task] = normalizeEcommerceHistory([body.task], 1);
+  if (!task) {
+    throw new Error("Ecommerce task response was not valid.");
   }
+  return task;
+}
+
+export async function createStoredEcommerceTask(input: CreateStoredEcommerceTaskInput): Promise<CreateStoredEcommerceTaskResult> {
+  const response = await fetch(ecommerceApiUrl("/api/ecommerce/generate"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(input)
+  });
+  const body = await readJsonResponse(response);
+  const [task] = normalizeEcommerceHistory([body.task], 1);
+  const taskId = typeof body.taskId === "string" && body.taskId.trim() ? body.taskId.trim() : task?.id;
+  if (!task || !taskId) {
+    throw new Error("Ecommerce task response was not valid.");
+  }
+  return { taskId, task };
 }

@@ -1,5 +1,5 @@
-import { settleGenerationTasks } from "./generationExecution";
-import type { ImageSize, InputImage } from "./types";
+import { settleGenerationTasks } from "./generationExecution.js";
+import type { ImageSize, InputImage } from "./types.js";
 
 interface GeneratedImage {
   data: string;
