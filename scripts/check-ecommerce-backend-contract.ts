@@ -110,6 +110,16 @@ function createFakes(options: { failObjectKeyIncludes?: string } = {}) {
         objectKey: input.objectKey,
         cosUrl: `https://cos.example.com/${encodeURIComponent(input.objectKey)}`
       };
+    },
+    async getObject(objectKey) {
+      const upload = uploads.find((item) => item.objectKey === objectKey);
+      if (!upload) {
+        throw new Error("Object not found.");
+      }
+      return {
+        body: Buffer.from(upload.body),
+        mimeType: upload.mimeType
+      };
     }
   };
 
@@ -394,6 +404,9 @@ const localStored = await localStorage.putObject({
 assert.equal(localStored.objectKey, "ecommerce/task-local/source/product.png");
 assert.equal(localStored.cosUrl, "http://localhost:8787/local-cos/ecommerce/task-local/source/product.png");
 assert.equal((await readFile(path.join(tempDir, "objects", "ecommerce", "task-local", "source", "product.png"))).toString(), "local-bytes");
+const localReadBack = await localStorage.getObject("ecommerce/task-local/source/product.png");
+assert.equal(localReadBack.body.toString(), "local-bytes");
+assert.equal(localReadBack.mimeType, "image/png");
 
 const localRepository = createLocalEcommerceTaskRepository({
   filePath: path.join(tempDir, "tasks.json")

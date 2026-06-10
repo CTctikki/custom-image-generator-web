@@ -84,6 +84,15 @@ function ecommerceApiUrl(path: string) {
   return `${ECOMMERCE_API_BASE_URL}${path}`;
 }
 
+function ecommerceAssetUrl(objectKey: string) {
+  return ecommerceApiUrl(
+    `/api/ecommerce/assets/${objectKey
+      .split("/")
+      .map((part) => encodeURIComponent(part))
+      .join("/")}`
+  );
+}
+
 const EMPTY_PRODUCT_COPY: ProductCopy = {
   sellingPoints: ["", "", ""],
   longTitle: "",
@@ -148,9 +157,12 @@ function normalizeImages(input: unknown): EcommerceHistoryImage[] {
         return null;
       }
 
+      const objectKey = typeof candidate.objectKey === "string" && candidate.objectKey.trim() ? candidate.objectKey : null;
       const imageDataUrl =
         typeof candidate.imageDataUrl === "string"
           ? candidate.imageDataUrl
+          : objectKey
+            ? ecommerceAssetUrl(objectKey)
           : typeof candidate.cosUrl === "string"
             ? candidate.cosUrl
             : undefined;
@@ -162,7 +174,7 @@ function normalizeImages(input: unknown): EcommerceHistoryImage[] {
         name: candidate.name,
         imageDataUrl,
         cosUrl: typeof candidate.cosUrl === "string" ? candidate.cosUrl : null,
-        objectKey: typeof candidate.objectKey === "string" ? candidate.objectKey : null,
+        objectKey,
         mimeType: typeof candidate.mimeType === "string" ? candidate.mimeType : null,
         prompt: candidate.prompt,
         createdAt: candidate.createdAt,

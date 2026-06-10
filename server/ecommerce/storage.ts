@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { ObjectStorage, PutObjectInput, StoredObject } from "./types.js";
+import type { ObjectStorage, PutObjectInput, StoredObject, StoredObjectBody } from "./types.js";
 
 const require = createRequire(import.meta.url);
 
@@ -21,6 +21,20 @@ function publicObjectUrl(publicBaseUrl: string, objectKey: string) {
     .split("/")
     .map((part) => encodeURIComponent(part))
     .join("/")}`;
+}
+
+function mimeTypeFromObjectKey(objectKey: string) {
+  const extension = path.extname(objectKey).toLowerCase();
+  if (extension === ".jpg" || extension === ".jpeg") {
+    return "image/jpeg";
+  }
+  if (extension === ".png") {
+    return "image/png";
+  }
+  if (extension === ".webp") {
+    return "image/webp";
+  }
+  return "application/octet-stream";
 }
 
 export function getLocalEcommerceDataDir(env: NodeJS.ProcessEnv = process.env) {
@@ -46,6 +60,19 @@ export function createLocalObjectStorage(options: LocalObjectStorageOptions): Ob
       return {
         objectKey: input.objectKey,
         cosUrl: publicObjectUrl(options.publicBaseUrl, input.objectKey)
+      };
+    },
+    async getObject(objectKey: string): Promise<StoredObjectBody> {
+      assertSafeObjectKey(objectKey);
+      const filePath = path.resolve(options.rootDir, ...objectKey.split("/"));
+      const rootPath = path.resolve(options.rootDir);
+      if (!filePath.startsWith(rootPath + path.sep) && filePath !== rootPath) {
+        throw new Error("Object key escaped the storage root.");
+      }
+
+      return {
+        body: await readFile(filePath),
+        mimeType: mimeTypeFromObjectKey(objectKey)
       };
     }
   };
@@ -93,6 +120,35 @@ export function createTencentCosObjectStorage(env: NodeJS.ProcessEnv = process.e
       return {
         objectKey: input.objectKey,
         cosUrl: publicObjectUrl(publicBaseUrl, input.objectKey)
+      };
+    },
+    async getObject(objectKey: string): Promise<StoredObjectBody> {
+      assertSafeObjectKey(objectKey);
+      const result = await new Promise<{ Body?: Buffer | Uint8Array | string; ContentType?: string }>((resolve, reject) => {
+        cos.getObject(
+          {
+            Bucket,
+            Region,
+            Key: objectKey
+          },
+          (error: Error | null, data: { Body?: Buffer | Uint8Array | string; ContentType?: string }) => {
+            if (error) {
+              reject(error);
+              return;
+            }
+            resolve(data);
+          }
+        );
+      });
+
+      const body = Buffer.isBuffer(result.Body)
+        ? result.Body
+        : result.Body instanceof Uint8Array
+          ? Buffer.from(result.Body)
+          : Buffer.from(result.Body ?? "");
+      return {
+        body,
+        mimeType: result.ContentType ?? mimeTypeFromObjectKey(objectKey)
       };
     }
   };

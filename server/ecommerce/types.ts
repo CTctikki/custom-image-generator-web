@@ -20,6 +20,11 @@ export interface StoredObject {
   cosUrl: string;
 }
 
+export interface StoredObjectBody {
+  body: Buffer;
+  mimeType: string | null;
+}
+
 export interface PutObjectInput {
   objectKey: string;
   mimeType: string;
@@ -29,6 +34,7 @@ export interface PutObjectInput {
 
 export interface ObjectStorage {
   putObject(input: PutObjectInput): Promise<StoredObject>;
+  getObject(objectKey: string): Promise<StoredObjectBody>;
 }
 
 export interface EcommerceProductImageRecord {
