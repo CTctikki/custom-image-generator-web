@@ -104,6 +104,22 @@ function splitHostPort(value: string, fallbackPort: number) {
   return { host: match[1], port: Number.parseInt(match[2], 10) || fallbackPort };
 }
 
+function isDuplicateMysqlIndexError(error: unknown) {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === "ER_DUP_KEYNAME");
+}
+
+async function createMysqlIndexIfMissing(pool: MySqlPool, indexName: string, tableName: string, columns: string) {
+  try {
+    await pool.query(
+      `create index ${escapeMysqlIdentifier(indexName)} on ${escapeMysqlIdentifier(tableName)} (${columns})`
+    );
+  } catch (error) {
+    if (!isDuplicateMysqlIndexError(error)) {
+      throw error;
+    }
+  }
+}
+
 export function createLocalEcommerceTaskRepository(options: LocalEcommerceTaskRepositoryOptions): EcommerceTaskRepository {
   const jobsFilePath = `${options.filePath}.jobs.json`;
 
@@ -414,6 +430,25 @@ export class MySqlEcommerceTaskRepository implements EcommerceTaskRepository {
           constraint ecommerce_task_jobs_task_fk foreign key (task_id) references ecommerce_tasks(id) on delete cascade
         ) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci
       `);
+      await createMysqlIndexIfMissing(this.pool, "ecommerce_tasks_created_at_idx", "ecommerce_tasks", "created_at desc");
+      await createMysqlIndexIfMissing(
+        this.pool,
+        "ecommerce_tasks_user_created_idx",
+        "ecommerce_tasks",
+        "user_id, created_at desc"
+      );
+      await createMysqlIndexIfMissing(
+        this.pool,
+        "ecommerce_task_jobs_status_created_idx",
+        "ecommerce_task_jobs",
+        "status, created_at"
+      );
+      await createMysqlIndexIfMissing(
+        this.pool,
+        "ecommerce_task_jobs_status_locked_created_idx",
+        "ecommerce_task_jobs",
+        "status, locked_at, created_at"
+      );
     })();
     return this.schemaReady;
   }
@@ -519,17 +554,31 @@ export class MySqlEcommerceTaskRepository implements EcommerceTaskRepository {
       await connection.beginTransaction();
       const [rows] = await connection.execute<RowDataPacket[]>(
         `
-          select task_id, payload
+          select task_id
           from ecommerce_task_jobs
           where status = 'queued'
-             or (status = 'running' and locked_at is not null and locked_at < ?)
           order by created_at asc
           limit 1
           for update skip locked
-        `,
-        [staleBefore]
+        `
       );
-      const row = rows[0];
+      let row = rows[0];
+      if (!row) {
+        const [staleRows] = await connection.execute<RowDataPacket[]>(
+          `
+            select task_id
+            from ecommerce_task_jobs
+            where status = 'running'
+              and locked_at is not null
+              and locked_at < ?
+            order by locked_at asc, created_at asc
+            limit 1
+            for update skip locked
+          `,
+          [staleBefore]
+        );
+        row = staleRows[0];
+      }
       if (!row) {
         await connection.commit();
         return null;
@@ -547,10 +596,21 @@ export class MySqlEcommerceTaskRepository implements EcommerceTaskRepository {
         `,
         [input.workerId, lockedAt, lockedAt, row.task_id]
       );
+      const [payloadRows] = await connection.execute<RowDataPacket[]>(
+        `
+          select payload
+          from ecommerce_task_jobs
+          where task_id = ?
+          limit 1
+        `,
+        [row.task_id]
+      );
       await connection.commit();
 
       const task = await this.getById(row.task_id);
-      return task ? { task, input: parseJsonRecord<CreateEcommerceTaskInput>(row.payload) } : null;
+      return task && payloadRows[0]
+        ? { task, input: parseJsonRecord<CreateEcommerceTaskInput>(payloadRows[0].payload) }
+        : null;
     } catch (error) {
       await connection.rollback();
       throw error;
