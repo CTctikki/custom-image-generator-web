@@ -2,12 +2,6 @@ import cors from "cors";
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  handleCreateEcommerceTaskRequest,
-  handleGetEcommerceTaskRequest,
-  handleListEcommerceTasksRequest
-} from "./ecommerce/http.js";
-import { createObjectStorageFromEnv, getLocalObjectStorageRoot } from "./ecommerce/storage.js";
 
 type ProviderProtocol = "gemini_generate_content" | "openai_chat_completions" | "openai_images";
 type AspectRatio =
@@ -61,7 +55,6 @@ const distDir = path.resolve(__dirname, "../dist");
 
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: "80mb" }));
-app.use("/local-cos", express.static(getLocalObjectStorageRoot()));
 
 function normalizeBaseUrl(apiBaseUrl: string) {
   const url = new URL(apiBaseUrl.trim());
@@ -510,42 +503,6 @@ app.post("/api/models", async (request, response) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "获取模型列表失败。";
     response.status(400).json({ error: message });
-  }
-});
-
-app.post("/api/ecommerce/generate", async (request, response) => {
-  const result = await handleCreateEcommerceTaskRequest(request.body);
-  response.status(result.status).json(result.body);
-});
-
-app.get("/api/ecommerce/tasks", async (request, response) => {
-  const result = await handleListEcommerceTasksRequest(request.query);
-  response.status(result.status).json(result.body);
-});
-
-app.get("/api/ecommerce/tasks/:id", async (request, response) => {
-  const result = await handleGetEcommerceTaskRequest({ ...request.query, id: request.params.id });
-  response.status(result.status).json(result.body);
-});
-
-let ecommerceAssetStorage: ReturnType<typeof createObjectStorageFromEnv> | null = null;
-
-function getEcommerceAssetStorage() {
-  ecommerceAssetStorage ??= createObjectStorageFromEnv();
-  return ecommerceAssetStorage;
-}
-
-app.get("/api/ecommerce/assets/*", async (request, response) => {
-  const params = request.params as Record<string, string | undefined>;
-  const objectKey = typeof params["0"] === "string" ? params["0"] : "";
-  try {
-    const object = await getEcommerceAssetStorage().getObject(objectKey);
-    response.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-    response.type(object.mimeType ?? "application/octet-stream");
-    response.send(object.body);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Object was not found.";
-    response.status(message.includes("Unsafe") ? 400 : 404).json({ error: message });
   }
 });
 

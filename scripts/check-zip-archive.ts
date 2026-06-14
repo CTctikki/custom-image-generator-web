@@ -1,4 +1,4 @@
-import { createHistoryZipBlob, createZipBlob } from "../src/zipArchive";
+import { createZipBlob } from "../src/zipArchive";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -30,50 +30,5 @@ assert(
   buffer.some((value, index) => value === 0x50 && buffer[index + 1] === 0x4b && buffer[index + 2] === 0x05 && buffer[index + 3] === 0x06),
   "ZIP must include an end of central directory record."
 );
-
-const originalFetch = globalThis.fetch;
-globalThis.fetch = (async (input) => {
-  assert(String(input) === "https://cos.example.com/task/main.png", "Remote ZIP entries must fetch the COS URL.");
-  return new Response(new TextEncoder().encode("remote-image"), {
-    status: 200,
-    headers: {
-      "Content-Type": "image/png"
-    }
-  });
-}) as typeof fetch;
-
-try {
-  const historyZip = await createHistoryZipBlob([
-    {
-      id: "data-url",
-      imageDataUrl: `data:image/png;base64,${Buffer.from("data-url-image").toString("base64")}`,
-      mimeType: "image/png",
-      prompt: "data url",
-      modelName: "gpt-image-2",
-      protocol: "openai_images",
-      aspectRatio: "1:1",
-      imageSize: "1K",
-      inputImageNames: [],
-      createdAt: "2026-06-08T10:00:00.000Z"
-    },
-    {
-      id: "cos-url",
-      imageDataUrl: "https://cos.example.com/task/main.png",
-      mimeType: "image/png",
-      prompt: "cos url",
-      modelName: "gpt-image-2",
-      protocol: "openai_images",
-      aspectRatio: "1:1",
-      imageSize: "1K",
-      inputImageNames: [],
-      createdAt: "2026-06-08T10:00:01.000Z"
-    }
-  ]);
-  const historyText = new TextDecoder().decode(new Uint8Array(await historyZip.arrayBuffer()));
-  assert(historyText.includes("data-url-image"), "History ZIP must include bytes decoded from data URLs.");
-  assert(historyText.includes("remote-image"), "History ZIP must include bytes fetched from remote image URLs.");
-} finally {
-  globalThis.fetch = originalFetch;
-}
 
 console.log("ZIP archive checks passed.");

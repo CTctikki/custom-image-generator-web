@@ -6,7 +6,6 @@ const index = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const api = readFileSync(new URL("../src/api.ts", import.meta.url), "utf8");
 const ecommerce = readFileSync(new URL("../src/ecommerceGeneration.ts", import.meta.url), "utf8");
-const ecommerceHistoryStore = readFileSync(new URL("../src/ecommerceHistoryStore.ts", import.meta.url), "utf8");
 
 function assert(condition, message) {
   if (!condition) {
@@ -145,29 +144,14 @@ assert(app.includes('from "./ecommerceGeneration"'), "App must import ecommerce 
 [
   "DEFAULT_ECOMMERCE_TEXT_MODEL",
   "DEFAULT_ECOMMERCE_IMAGE_MODEL",
-  "ECOMMERCE_IMAGE_TASKS"
+  "ECOMMERCE_IMAGE_TASKS",
+  "generateProductCopy",
+  "generateEcommerceImages"
 ].forEach((name) => {
   assert(app.includes(name), `App must use ${name} from the ecommerce generation module.`);
 });
-assert(app.includes("createStoredEcommerceTask"), "App must create ecommerce tasks through the server task API.");
-assert(app.includes("loadStoredEcommerceTask"), "App must poll ecommerce task status through the server task API.");
-assert(app.includes("loadStoredEcommerceHistory"), "App must load ecommerce history from browser-local storage.");
-assert(app.includes("saveStoredEcommerceHistory"), "App must persist ecommerce history to browser-local storage.");
-assert(!app.includes("generateProductCopy"), "App must not call ecommerce text generation directly from the browser.");
-assert(!app.includes("generateEcommerceImages({"), "App must not call ecommerce image generation directly from the browser.");
 assert(app.includes("DEFAULT_ECOMMERCE_IMAGE_SIZE"), "App must use the default ecommerce image quality.");
 assert(ecommerce.includes("generateEcommerceImages"), "Ecommerce service must expose the four-image generation orchestrator.");
-assert(ecommerceHistoryStore.includes("ecommerceApiUrl"), "Ecommerce task API client must support a configurable server base URL.");
-assert(ecommerceHistoryStore.includes('"/api/ecommerce/generate"'), "Ecommerce task creation must call the server API.");
-assert(ecommerceHistoryStore.includes("taskId"), "Ecommerce task creation must expose the server task ID for polling.");
-assert(
-  ecommerceHistoryStore.includes("loadStoredEcommerceTask") &&
-    ecommerceHistoryStore.includes("`/api/ecommerce/tasks/${"),
-  "Ecommerce history store must expose GET /api/ecommerce/tasks/:id for polling."
-);
-assert(ecommerceHistoryStore.includes("custom-image-ecommerce-history-v1"), "Ecommerce history loading must use browser-local storage.");
-assert(!ecommerceHistoryStore.includes("`/api/ecommerce/tasks?"), "Ecommerce history loading must not list shared server tasks.");
-assert(!ecommerceHistoryStore.includes("indexedDB"), "Ecommerce history store must not use IndexedDB after server persistence is added.");
 assert(
   app.includes("ecommerceProductTitle") && app.includes("商品标题"),
   "Ecommerce UI must expose a product title input."
@@ -215,10 +199,10 @@ assert(
 assert(
   app.includes("EcommerceHistoryItem") &&
     app.includes("loadStoredEcommerceHistory") &&
-    app.includes("createStoredEcommerceTask") &&
+    app.includes("saveStoredEcommerceHistory") &&
     app.includes("setEcommerceHistory") &&
     app.includes("ecommerce-history-panel"),
-  "Ecommerce results must be stored in a separate server-backed ecommerce task history library."
+  "Ecommerce results must be stored in a separate ecommerce task history library."
 );
 const ecommerceGenerationBlock = app.slice(app.indexOf("const runEcommerceImageGeneration"), app.indexOf("const runEcommerceGenerate"));
 assert(

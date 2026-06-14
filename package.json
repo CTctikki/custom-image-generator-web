@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "concurrently -k -n api,web -c cyan,green \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "tsx watch server/index.ts",
-    "dev:worker:ecommerce": "tsx server/ecommerce/worker.ts",
     "dev:web": "vite --host 127.0.0.1 --port 5174",
     "build:case-library-data": "node scripts/build-case-library-data.mjs",
     "generate:case-previews": "node scripts/generate-case-previews.mjs",
@@ -14,7 +13,7 @@
     "build": "npm run build:web && npm run build:server",
     "build:web": "vite build",
     "build:server": "tsc -p tsconfig.server.json",
-    "test": "npm run test:ui-contract && npm run test:routing-contract && npm run test:history-storage-contract && npm run test:zip-archive && npm run test:error-copy && npm run test:api-timeout && npm run test:openai-image-size && npm run test:generation-plan && npm run test:generation-execution && npm run test:ecommerce-generation && npm run test:ecommerce-backend && npm run test:case-library && npm run test:case-library-performance",
+    "test": "npm run test:ui-contract && npm run test:routing-contract && npm run test:history-storage-contract && npm run test:zip-archive && npm run test:error-copy && npm run test:api-timeout && npm run test:openai-image-size && npm run test:generation-plan && npm run test:generation-execution && npm run test:ecommerce-generation && npm run test:case-library && npm run test:case-library-performance",
     "test:ui-contract": "node scripts/check-ui-contract.mjs",
     "test:routing-contract": "node scripts/check-routing-contract.mjs",
     "test:history-storage-contract": "node scripts/check-history-storage-contract.mjs",
@@ -25,21 +24,15 @@
     "test:generation-plan": "tsx scripts/check-generation-plan.ts",
     "test:generation-execution": "tsx scripts/check-generation-execution.ts",
     "test:ecommerce-generation": "tsx scripts/check-ecommerce-generation-contract.ts",
-    "test:ecommerce-backend": "tsx scripts/check-ecommerce-backend-contract.ts",
     "test:case-library": "node scripts/check-case-library-contract.mjs",
     "test:case-library-performance": "node scripts/check-case-library-performance.mjs",
-    "start": "node dist-server/server/index.js",
-    "worker:ecommerce": "node dist-server/server/ecommerce/worker.js",
+    "start": "node dist-server/index.js",
     "preview": "vite preview --host 127.0.0.1 --port 4174"
   },
   "dependencies": {
-    "@vercel/functions": "^3.7.0",
     "cors": "^2.8.5",
-    "cos-nodejs-sdk-v5": "^2.15.4",
     "express": "^4.19.2",
     "lucide-react": "^0.468.0",
-    "mysql2": "^3.22.5",
-    "pg": "^8.21.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
@@ -47,7 +40,6 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^24.9.1",
-    "@types/pg": "^8.20.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.0.4",
@@ -56,21 +48,5 @@
     "tsx": "^4.19.2",
     "typescript": "^5.9.3",
     "vite": "^7.1.12"
-  },
-  "description": "这是一个独立的 Web 生图工作台，面向浏览器使用。前端只负责输入 API Key、选择模型、上传参考图、填写提示词、提交生成、展示结果和展示本地历史记录。",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/CTctikki/custom-image-generator-web.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/CTctikki/custom-image-generator-web/issues"
-  },
-  "homepage": "https://github.com/CTctikki/custom-image-generator-web#readme"
+  }
 }
