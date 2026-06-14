@@ -1,4 +1,4 @@
-import { createEcommerceTask, getEcommerceTask, listEcommerceTasks, scheduleEcommerceTask } from "./service.js";
+import { createEcommerceTask, getEcommerceTask, scheduleEcommerceTask } from "./service.js";
 import type { CreateEcommerceTaskInput, EcommerceServiceDependencies, EcommerceTaskRecord } from "./types.js";
 
 export interface EcommerceJsonResponse {
@@ -8,12 +8,6 @@ export interface EcommerceJsonResponse {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Ecommerce request failed.";
-}
-
-function parseLimit(value: unknown) {
-  const raw = Array.isArray(value) ? value[0] : value;
-  const parsed = typeof raw === "string" || typeof raw === "number" ? Number.parseInt(String(raw), 10) : Number.NaN;
-  return Number.isFinite(parsed) ? parsed : 30;
 }
 
 export async function handleCreateEcommerceTaskRequest(
@@ -68,22 +62,10 @@ export async function handleListEcommerceTasksRequest(
   query: Record<string, unknown>,
   deps: Partial<Pick<EcommerceServiceDependencies, "repository">> = {}
 ): Promise<EcommerceJsonResponse> {
-  try {
-    const tasks = await listEcommerceTasks(
-      {
-        limit: parseLimit(query.limit),
-        userId: typeof query.userId === "string" && query.userId.trim() ? query.userId.trim() : null
-      },
-      deps
-    );
-    return {
-      status: 200,
-      body: { tasks }
-    };
-  } catch (error) {
-    return {
-      status: 400,
-      body: { error: errorMessage(error), tasks: [] as EcommerceTaskRecord[] }
-    };
-  }
+  void query;
+  void deps;
+  return {
+    status: 200,
+    body: { tasks: [] as EcommerceTaskRecord[] }
+  };
 }

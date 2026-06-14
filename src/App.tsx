@@ -48,6 +48,7 @@ import {
   createStoredEcommerceTask,
   loadStoredEcommerceTask,
   loadStoredEcommerceHistory,
+  saveStoredEcommerceHistory,
   type EcommerceHistoryImage,
   type EcommerceHistoryItem
 } from "./ecommerceHistoryStore";
@@ -1226,6 +1227,16 @@ export default function App() {
       isActive = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isEcommerceHistoryLoaded) {
+      return;
+    }
+
+    saveStoredEcommerceHistory(ecommerceHistory, ECOMMERCE_HISTORY_LIMIT).catch(() => {
+      setStatusMessage("电商历史保存到本机浏览器失败，本次仍可继续生成。");
+    });
+  }, [ecommerceHistory, isEcommerceHistoryLoaded]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {

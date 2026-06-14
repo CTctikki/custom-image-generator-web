@@ -370,7 +370,7 @@ const httpListed = await handleListEcommerceTasksRequest(
   }
 );
 assert.equal(httpListed.status, 200);
-assert.equal((httpListed.body as { tasks: EcommerceTaskRecord[] }).tasks[0].id, "task-http");
+assert.deepEqual((httpListed.body as { tasks: EcommerceTaskRecord[] }).tasks, []);
 
 const httpMissing = await handleGetEcommerceTaskRequest(
   { id: "missing-task" },

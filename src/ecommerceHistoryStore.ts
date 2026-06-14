@@ -68,6 +68,8 @@ export interface CreateStoredEcommerceTaskResult {
   task: EcommerceHistoryItem;
 }
 
+const ECOMMERCE_HISTORY_STORAGE_KEY = "custom-image-ecommerce-history-v1";
+
 function defaultEcommerceApiBaseUrl() {
   if (typeof window === "undefined") {
     return "";
@@ -251,9 +253,17 @@ async function readJsonResponse(response: Response) {
 }
 
 export async function loadStoredEcommerceHistory(limit: number): Promise<EcommerceHistoryItem[]> {
-  const response = await fetch(ecommerceApiUrl(`/api/ecommerce/tasks?limit=${encodeURIComponent(String(limit))}`));
-  const body = await readJsonResponse(response);
-  return normalizeEcommerceHistory(body.tasks, limit);
+  try {
+    const raw = localStorage.getItem(ECOMMERCE_HISTORY_STORAGE_KEY);
+    return normalizeEcommerceHistory(raw ? JSON.parse(raw) : [], limit);
+  } catch {
+    return [];
+  }
+}
+
+export async function saveStoredEcommerceHistory(history: EcommerceHistoryItem[], limit: number): Promise<void> {
+  const items = normalizeEcommerceHistory(history, limit);
+  localStorage.setItem(ECOMMERCE_HISTORY_STORAGE_KEY, JSON.stringify(items));
 }
 
 export async function loadStoredEcommerceTask(taskId: string): Promise<EcommerceHistoryItem> {

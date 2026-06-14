@@ -151,8 +151,8 @@ assert(app.includes('from "./ecommerceGeneration"'), "App must import ecommerce 
 });
 assert(app.includes("createStoredEcommerceTask"), "App must create ecommerce tasks through the server task API.");
 assert(app.includes("loadStoredEcommerceTask"), "App must poll ecommerce task status through the server task API.");
-assert(app.includes("loadStoredEcommerceHistory"), "App must load ecommerce history from the server task API.");
-assert(!app.includes("saveStoredEcommerceHistory"), "App must not persist ecommerce history to browser IndexedDB.");
+assert(app.includes("loadStoredEcommerceHistory"), "App must load ecommerce history from browser-local storage.");
+assert(app.includes("saveStoredEcommerceHistory"), "App must persist ecommerce history to browser-local storage.");
 assert(!app.includes("generateProductCopy"), "App must not call ecommerce text generation directly from the browser.");
 assert(!app.includes("generateEcommerceImages({"), "App must not call ecommerce image generation directly from the browser.");
 assert(app.includes("DEFAULT_ECOMMERCE_IMAGE_SIZE"), "App must use the default ecommerce image quality.");
@@ -165,7 +165,8 @@ assert(
     ecommerceHistoryStore.includes("`/api/ecommerce/tasks/${"),
   "Ecommerce history store must expose GET /api/ecommerce/tasks/:id for polling."
 );
-assert(ecommerceHistoryStore.includes("`/api/ecommerce/tasks?"), "Ecommerce history loading must call the server API.");
+assert(ecommerceHistoryStore.includes("custom-image-ecommerce-history-v1"), "Ecommerce history loading must use browser-local storage.");
+assert(!ecommerceHistoryStore.includes("`/api/ecommerce/tasks?"), "Ecommerce history loading must not list shared server tasks.");
 assert(!ecommerceHistoryStore.includes("indexedDB"), "Ecommerce history store must not use IndexedDB after server persistence is added.");
 assert(
   app.includes("ecommerceProductTitle") && app.includes("商品标题"),
