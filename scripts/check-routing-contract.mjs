@@ -23,6 +23,9 @@ assert(api.includes("resolveProtocolFromModelName"), "Browser client must resolv
 assert(server.includes("resolveProtocolFromModelName"), "Local server must resolve stale protocols from image model names.");
 assert(app.includes("selectedModel?.protocol ?? resolveProtocolFromModelName"), "Generation must use the selected model protocol before falling back through model-name inference.");
 assert(app.includes("protocol: generationProtocol"), "Generation requests and history must record the resolved model protocol.");
+assert(api.includes('SUFY_IMAGE_MODEL_ID = "openai/gpt-image-2"'), "Browser model sorting must explicitly recognize the Sufy image model.");
+assert(api.includes('return -2;') && api.includes("isSufyImageModelId"), "Browser model sorting must put Sufy image model before legacy gpt-image-2.");
+assert(app.includes('PREFERRED_IMAGE_MODEL_ID = "openai/gpt-image-2"'), "Workspace model selection must prefer the Sufy image model when available.");
 assert(!rewriteSources.includes("/api/:path*"), "Vercel must not proxy removed /api wrapper paths.");
 assert(!rewriteSources.includes("/v1/:path*"), "Vercel must not proxy /v1 provider calls.");
 assert(!rewriteSources.includes("/v1beta/:path*"), "Vercel must not proxy /v1beta provider calls.");

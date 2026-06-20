@@ -288,6 +288,12 @@ export function resolveProtocolFromModelName(modelId: string, fallback: Provider
   return fallback;
 }
 
+const SUFY_IMAGE_MODEL_ID = "openai/gpt-image-2";
+
+function isSufyImageModelId(modelId: string) {
+  return modelId.trim().toLowerCase() === SUFY_IMAGE_MODEL_ID;
+}
+
 function isImage2ModelId(modelId: string) {
   const normalizedModelId = modelId.trim().toLowerCase();
   return normalizedModelId === "gpt-image-2" || normalizedModelId === "gptimage2" || normalizedModelId === "image2";
@@ -295,6 +301,9 @@ function isImage2ModelId(modelId: string) {
 
 function modelPriority(model: ProviderModelOption) {
   const id = model.id.toLowerCase();
+  if (isSufyImageModelId(id)) {
+    return -2;
+  }
   if (isImage2ModelId(id)) {
     return -1;
   }
