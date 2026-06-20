@@ -289,14 +289,19 @@ export function resolveProtocolFromModelName(modelId: string, fallback: Provider
 }
 
 const SF_IMAGE_MODEL_ID = "SF-gpt-image-2";
+const BLOCKED_LEGACY_IMAGE_MODEL_IDS = new Set(["gpt-image-2", "gptimage2", "image2", "openai/gpt-image-2"]);
 
 function isSfImageModelId(modelId: string) {
   return modelId.trim().toLowerCase() === SF_IMAGE_MODEL_ID.toLowerCase();
 }
 
+function isBlockedLegacyImageModelId(modelId: string) {
+  return BLOCKED_LEGACY_IMAGE_MODEL_IDS.has(modelId.trim().toLowerCase());
+}
+
 function isImage2ModelId(modelId: string) {
   const normalizedModelId = modelId.trim().toLowerCase();
-  return normalizedModelId === "gpt-image-2" || normalizedModelId === "gptimage2" || normalizedModelId === "image2";
+  return normalizedModelId.includes("gpt-image-2") || normalizedModelId === "gptimage2" || normalizedModelId === "image2";
 }
 
 function modelPriority(model: ProviderModelOption) {
@@ -340,6 +345,9 @@ function dedupeModels(models: ProviderModelOption[]) {
   models.forEach((model) => {
     const id = normalizeModelId(model.id);
     if (!id) {
+      return;
+    }
+    if (isBlockedLegacyImageModelId(id)) {
       return;
     }
 

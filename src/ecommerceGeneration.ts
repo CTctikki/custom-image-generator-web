@@ -78,7 +78,7 @@ export type EcommerceImageGenerationResult =
     };
 
 export const DEFAULT_ECOMMERCE_TEXT_MODEL = "gpt-5.5";
-export const DEFAULT_ECOMMERCE_IMAGE_MODEL = "gpt-image-2";
+export const DEFAULT_ECOMMERCE_IMAGE_MODEL = "SF-gpt-image-2";
 export const DEFAULT_ECOMMERCE_IMAGE_SIZE: ImageSize = "1K";
 
 const ECOMMERCE_IMAGE_SIZE_BY_QUALITY: Record<ImageSize, string> = {
