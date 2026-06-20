@@ -27,6 +27,7 @@ assert(api.includes('SF_IMAGE_MODEL_ID = "SF-gpt-image-2"'), "Browser model sort
 assert(api.includes('return -2;') && api.includes("isSfImageModelId"), "Browser model sorting must put SF image model before legacy gpt-image-2.");
 assert(api.includes("BLOCKED_LEGACY_IMAGE_MODEL_IDS"), "Browser model list must hide legacy broken image2 aliases.");
 assert(app.includes('PREFERRED_IMAGE_MODEL_ID = "SF-gpt-image-2"'), "Workspace model selection must prefer the SF image model when available.");
+assert(!app.includes("<strong>gptimage2</strong>"), "Visible release copy must not promote the broken legacy image2 model.");
 assert(!rewriteSources.includes("/api/:path*"), "Vercel must not proxy removed /api wrapper paths.");
 assert(!rewriteSources.includes("/v1/:path*"), "Vercel must not proxy /v1 provider calls.");
 assert(!rewriteSources.includes("/v1beta/:path*"), "Vercel must not proxy /v1beta provider calls.");

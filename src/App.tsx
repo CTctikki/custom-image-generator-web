@@ -2881,7 +2881,7 @@ export default function App() {
             <h2 id="release-announcement-title">5.20更新公告</h2>
             <div className="release-announcement-copy">
               <p>
-                接入了全球最强生图模型 <strong>gptimage2</strong>，收集了全网{" "}
+                接入了新的 <strong>SF 生图通道</strong>，收集了全网{" "}
                 <strong>442 条玩法案例</strong>，一键复刻，立即赚钱。
               </p>
               <p>
