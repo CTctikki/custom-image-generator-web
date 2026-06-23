@@ -288,11 +288,11 @@ export function resolveProtocolFromModelName(modelId: string, fallback: Provider
   return fallback;
 }
 
-const SF_IMAGE_MODEL_ID = "SF-gpt-image-2";
+const ZN_IMAGE_MODEL_ID = "ZN-gpt-image-2";
 const BLOCKED_LEGACY_IMAGE_MODEL_IDS = new Set(["gpt-image-2", "gptimage2", "image2", "openai/gpt-image-2"]);
 
-function isSfImageModelId(modelId: string) {
-  return modelId.trim().toLowerCase() === SF_IMAGE_MODEL_ID.toLowerCase();
+function isZnImageModelId(modelId: string) {
+  return modelId.trim().toLowerCase() === ZN_IMAGE_MODEL_ID.toLowerCase();
 }
 
 function isBlockedLegacyImageModelId(modelId: string) {
@@ -306,7 +306,7 @@ function isImage2ModelId(modelId: string) {
 
 function modelPriority(model: ProviderModelOption) {
   const id = model.id.toLowerCase();
-  if (isSfImageModelId(id)) {
+  if (isZnImageModelId(id)) {
     return -2;
   }
   if (isImage2ModelId(id)) {

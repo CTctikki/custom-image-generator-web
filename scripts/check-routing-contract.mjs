@@ -23,10 +23,10 @@ assert(api.includes("resolveProtocolFromModelName"), "Browser client must resolv
 assert(server.includes("resolveProtocolFromModelName"), "Local server must resolve stale protocols from image model names.");
 assert(app.includes("selectedModel?.protocol ?? resolveProtocolFromModelName"), "Generation must use the selected model protocol before falling back through model-name inference.");
 assert(app.includes("protocol: generationProtocol"), "Generation requests and history must record the resolved model protocol.");
-assert(api.includes('SF_IMAGE_MODEL_ID = "SF-gpt-image-2"'), "Browser model sorting must explicitly recognize the SF image model.");
-assert(api.includes('return -2;') && api.includes("isSfImageModelId"), "Browser model sorting must put SF image model before legacy gpt-image-2.");
+assert(api.includes('ZN_IMAGE_MODEL_ID = "ZN-gpt-image-2"'), "Browser model sorting must explicitly recognize the ZN image model.");
+assert(api.includes('return -2;') && api.includes("isZnImageModelId"), "Browser model sorting must put ZN image model before SF and legacy gpt-image-2.");
 assert(api.includes("BLOCKED_LEGACY_IMAGE_MODEL_IDS"), "Browser model list must hide legacy broken image2 aliases.");
-assert(app.includes('PREFERRED_IMAGE_MODEL_ID = "SF-gpt-image-2"'), "Workspace model selection must prefer the SF image model when available.");
+assert(app.includes('PREFERRED_IMAGE_MODEL_ID = "ZN-gpt-image-2"'), "Workspace model selection must prefer the ZN image model when available.");
 assert(!app.includes("<strong>gptimage2</strong>"), "Visible release copy must not promote the broken legacy image2 model.");
 assert(!rewriteSources.includes("/api/:path*"), "Vercel must not proxy removed /api wrapper paths.");
 assert(!rewriteSources.includes("/v1/:path*"), "Vercel must not proxy /v1 provider calls.");

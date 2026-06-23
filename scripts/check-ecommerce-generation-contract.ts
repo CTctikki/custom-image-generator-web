@@ -117,7 +117,7 @@ assertIncludes(productCopyPrompt, "long_title", "Product copy prompt should requ
 assertIncludes(productCopyPrompt, "short_title", "Product copy prompt should request a short title");
 
 assert.equal(DEFAULT_ECOMMERCE_TEXT_MODEL, "gpt-5.5");
-assert.equal(DEFAULT_ECOMMERCE_IMAGE_MODEL, "SF-gpt-image-2");
+assert.equal(DEFAULT_ECOMMERCE_IMAGE_MODEL, "ZN-gpt-image-2");
 assert.equal(DEFAULT_ECOMMERCE_IMAGE_SIZE, "1K");
 assert.deepEqual(
   ECOMMERCE_IMAGE_TASKS.map((task) => task.type),
@@ -242,7 +242,7 @@ const generatedImage = await withMockedFetch(
     assert.ok(init?.body instanceof FormData, "Ecommerce image request body should be FormData.");
 
     const formData = init.body as FormData;
-    assert.equal(formData.get("model"), "SF-gpt-image-2");
+    assert.equal(formData.get("model"), "ZN-gpt-image-2");
     assert.equal(formData.get("size"), "1024x1024");
     assert.equal(formData.get("output_format"), "png");
     assert.equal(formData.get("n"), "1");
