@@ -1931,9 +1931,22 @@ textarea {
 
 .history-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
   min-width: 0;
+}
+
+.history-select-all-button {
+  flex: 1 1 88px;
+  min-width: 86px;
+  white-space: nowrap;
+}
+
+.history-select-all-button.is-partial {
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 72%, var(--surface-raised));
+  color: var(--accent);
 }
 
 .history-actions .control-button {

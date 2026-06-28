@@ -83,6 +83,13 @@ assert(app.includes("downloadSelectedHistory"), "History manager must support ba
 assert(app.includes('title="下载选中"'), "History manager must expose a selected-download button.");
 assert(app.includes("downloadHistoryAsZip"), "Batch downloads must create one ZIP file.");
 assert(!app.includes("selectedItems.forEach((item) => downloadDataUrl"), "Batch download must not trigger many separate browser downloads.");
+assert(app.includes("toggleAllHistorySelection"), "History manager must support selecting all images at once.");
+assert(app.includes("historySelectionState"), "History manager must track all, partial, and empty selection states.");
+assert(app.includes('className={`text-button small history-select-all-button'), "History manager must expose a visible select-all control.");
+assert(app.includes('aria-pressed={historySelectionState === "all"}'), "History select-all control must announce the all-selected state.");
+assert(app.includes('disabled={!isHistoryLoaded || history.length === 0}'), "History select-all control must be disabled while loading or empty.");
+assert(app.includes('historySelectionState === "all" ? "取消全选" : "全选"'), "History select-all control must switch between select-all and clear-all labels.");
+assert(styles.includes(".history-select-all-button.is-partial"), "History select-all control must show a partial-selection state.");
 assert(app.includes("history-title-row"), "History header must separate title content from actions.");
 assert(app.includes('aria-label="历史批量操作"'), "History batch controls must be grouped for a cleaner layout.");
 assert(styles.includes("clamp(260px, 19vw, 300px)"), "History sidebar should have enough dynamic width for batch controls.");

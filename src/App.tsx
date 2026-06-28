@@ -676,6 +676,13 @@ export default function App() {
     }
     return history.find((item) => item.id === selectedHistoryId) ?? history[0];
   }, [history, selectedHistoryId]);
+  const selectedHistoryIdSet = useMemo(() => new Set(selectedHistoryIds), [selectedHistoryIds]);
+  const selectedHistoryCount = useMemo(
+    () => history.reduce((count, item) => count + (selectedHistoryIdSet.has(item.id) ? 1 : 0), 0),
+    [history, selectedHistoryIdSet]
+  );
+  const historySelectionState =
+    history.length === 0 || selectedHistoryCount === 0 ? "none" : selectedHistoryCount === history.length ? "all" : "partial";
 
   const selectedModel = useMemo(
     () => modelOptions.find((model) => model.id === workspace.modelName) ?? null,
@@ -1291,9 +1298,15 @@ export default function App() {
   useEffect(() => {
     if (history.length === 0) {
       setSelectedHistoryId(null);
+      setSelectedHistoryIds([]);
       return;
     }
     setSelectedHistoryId((current) => (current && history.some((item) => item.id === current) ? current : history[0].id));
+    setSelectedHistoryIds((current) => {
+      const historyIds = new Set(history.map((item) => item.id));
+      const next = current.filter((id) => historyIds.has(id));
+      return next.length === current.length ? current : next;
+    });
   }, [history]);
 
   const openFilePicker = (nextAction: typeof fileAction) => {
@@ -1779,6 +1792,14 @@ export default function App() {
     setSelectedHistoryIds((current) =>
       current.includes(historyId) ? current.filter((item) => item !== historyId) : [...current, historyId]
     );
+  };
+
+  const toggleAllHistorySelection = () => {
+    if (!isHistoryLoaded || history.length === 0) {
+      return;
+    }
+
+    setSelectedHistoryIds(historySelectionState === "all" ? [] : history.map((item) => item.id));
   };
 
   const deleteSelectedHistory = () => {
@@ -2335,7 +2356,7 @@ export default function App() {
           <div className="history-title-row">
             <div className="history-title">
               <h2>历史</h2>
-              <span>{isManagingHistory ? `已选 ${selectedHistoryIds.length}` : isHistoryLoaded ? `${history.length} 张` : "读取中"}</span>
+              <span>{isManagingHistory ? `已选 ${selectedHistoryCount}` : isHistoryLoaded ? `${history.length} 张` : "读取中"}</span>
             </div>
             {!isManagingHistory ? (
               <button className="text-button small" onClick={() => setIsManagingHistory(true)} type="button">
@@ -2346,9 +2367,23 @@ export default function App() {
           {isManagingHistory ? (
             <div className="history-actions" aria-label="历史批量操作">
               <button
+                aria-label={historySelectionState === "all" ? "取消全选历史" : "全选历史"}
+                aria-pressed={historySelectionState === "all"}
+                className={`text-button small history-select-all-button ${
+                  historySelectionState === "partial" ? "is-partial" : historySelectionState === "all" ? "is-active" : ""
+                }`}
+                disabled={!isHistoryLoaded || history.length === 0}
+                onClick={toggleAllHistorySelection}
+                title={historySelectionState === "all" ? "取消全选历史" : "全选历史"}
+                type="button"
+              >
+                <CheckCircle2 size={15} />
+                {historySelectionState === "all" ? "取消全选" : "全选"}
+              </button>
+              <button
                 aria-label="下载选中"
                 className="icon-button control-button"
-                disabled={selectedHistoryIds.length === 0}
+                disabled={selectedHistoryCount === 0}
                 onClick={downloadSelectedHistory}
                 title="下载选中"
                 type="button"
@@ -2357,7 +2392,7 @@ export default function App() {
               </button>
               <button
                 className="icon-button control-button"
-                disabled={selectedHistoryIds.length === 0}
+                disabled={selectedHistoryCount === 0}
                 onClick={deleteSelectedHistory}
                 title="删除选中"
                 type="button"
@@ -2381,7 +2416,7 @@ export default function App() {
               <button
                 aria-label={`查看 ${formatTime(item.createdAt)}`}
                 className={`history-tile ${item.id === visibleHistoryItem?.id ? "is-active" : ""} ${
-                  selectedHistoryIds.includes(item.id) ? "is-selected" : ""
+                  selectedHistoryIdSet.has(item.id) ? "is-selected" : ""
                 }`}
                 key={item.id}
                 onClick={() => {
